@@ -44,6 +44,7 @@ func CheckError(err error) {
 // It returns a *rsa.PrivateKey if no error is encountered.
 func CreateKeyPair() *rsa.PrivateKey {
 	rng := rand.Reader
+
     privkey, err := rsa.GenerateKey(rng, RSA_KEY_BITS)
     CheckError(err)
     return privkey
@@ -56,11 +57,11 @@ func SignMessage(privkey *rsa.PrivateKey, msg string) string {
 	rng := rand.Reader
 	message := []byte(msg)
 	hashed := sha256.Sum256(message)
-	signature, err := rsa.SignPKCS1v15(rng, privkey, crypto.SHA256, hashed[:])
 
-    signature_str := ""
+	signature, err := rsa.SignPKCS1v15(rng, privkey, crypto.SHA256, hashed[:])
     CheckError(err)
-    signature_str = hex.EncodeToString(signature)
+
+    signature_str := hex.EncodeToString(signature)
     return signature_str
 }
 
@@ -73,5 +74,5 @@ func VerifySignature(pubkey *rsa.PublicKey, msg string, signature_str string) bo
 	signature, _ := hex.DecodeString(signature_str)
 
 	err := rsa.VerifyPKCS1v15(pubkey, crypto.SHA256, hashed[:], signature)
-    return (err != nil)
+    return (err == nil)
 }

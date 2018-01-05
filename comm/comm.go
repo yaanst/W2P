@@ -4,6 +4,10 @@ import (
 	"github.com/yaanst/W2P/structs"
 )
 
+// -----------
+// - Structs -
+// -----------
+
 // Message is the basic struct that will be exchanged throughout the network
 type Message struct {
 	Orig *structs.Peer
@@ -22,3 +26,7 @@ type Data struct {
 type Meta struct {
 	WebsiteMap structs.WebsiteMap
 }
+
+// -----------
+// - Methods -
+// -----------

@@ -3,15 +3,18 @@
 package w2pcrypto
 
 import (
+    "os"
     "log"
     "crypto"
     "crypto/rsa"
     "crypto/rand"
     "crypto/sha256"
+    "encoding/gob"
     "encoding/hex"
 )
 
 const RSA_KEY_BITS int = 512
+const KEY_DIR string = "./keys/"
 
 // WebsiteKeyMap is a mapping from a website ID to its associated *rsa.PublicKey
 // used to verify signatures
@@ -42,12 +45,40 @@ func CheckError(err error) {
 
 // CreateKeyPair is a wrapper for the rsa.GenerateKey function.
 // It returns a *rsa.PrivateKey if no error is encountered.
-func CreateKeyPair() *rsa.PrivateKey {
+func CreateKey() *rsa.PrivateKey {
 	rng := rand.Reader
 
     privkey, err := rsa.GenerateKey(rng, RSA_KEY_BITS)
     CheckError(err)
     return privkey
+}
+
+// SaveKey that saves the given private key to disk
+// It uses Gob encoding (https://blog.golang.org/gobs-of-data)
+func SaveKey(fileName string, key *rsa.PrivateKey) {
+    outFile, err := os.Create(KEY_DIR + fileName)
+    CheckError(err)
+
+    encoder := gob.NewEncoder(outFile)
+    err = encoder.Encode(key)
+    CheckError(err)
+    outFile.Close()
+}
+
+// LoadKey loads the key with the given name
+// It returns a *rsa.PrivateKey (from which the public key can be retrieved)
+func LoadKey(fileName string) *rsa.PrivateKey {
+    var key rsa.PrivateKey
+
+    inFile, err := os.Open(KEY_DIR + fileName)
+    CheckError(err)
+
+    decoder := gob.NewDecoder(inFile)
+    err = decoder.Decode(&key)
+    CheckError(err)
+    inFile.Close()
+
+    return &key
 }
 
 // SignMessage takes in a *rsa.PrivateKey pointer and a message as a string.

@@ -1,6 +1,9 @@
 package comm
 
 import (
+	"bytes"
+	"encoding/gob"
+	"log"
 	"net"
 
 	"github.com/yaanst/W2P/structs"
@@ -88,8 +91,39 @@ func NewHeartbeat(orig, dest *structs.Peer) *Message {
 // - Methods -
 // -----------
 
-// Send sends a message with the provided connection to the dest
-// according to the routing table
-func (m *Message) Send(conn *net.UDPConn, rt *structs.RoutingTable) {
-	//TODO Implement
+// Send sends a message to the Peer at dest (dest is NOT final destination)
+func (m *Message) Send(conn *net.UDPConn, dest *structs.Peer) {
+	b := EncodeMessage(m)
+
+	conn.WriteToUDP(b, dest)
+}
+
+// EncodeMessage serializes a Message in order to send it
+func EncodeMessage(m *Message) []byte {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+
+	err := e.Encode(m)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return b.Bytes()
+}
+
+// DecodeMessage deserializes a Message in order to receive it
+func DecodeMessage(b []byte) *Message {
+	m := &Message{}
+
+	bb := bytes.Buffer{}
+	bb.Write(b)
+
+	d := gob.NewDecoder(&bb)
+
+	err := d.Decode(m)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return m
 }

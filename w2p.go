@@ -3,7 +3,7 @@ package main
 import (
     "fmt"
     "flag"
-    "W2P/w2pcrypto"
+    "github.com/yaanst/W2P/w2pcrypto"
 )
 
 func main() {

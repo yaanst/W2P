@@ -92,10 +92,11 @@ func NewHeartbeat(orig, dest *structs.Peer) *Message {
 // -----------
 
 // Send sends a message to the Peer at dest (dest is NOT final destination)
-func (m *Message) Send(conn *net.UDPConn, dest *structs.Peer) {
+func (m *Message) Send(conn *net.UDPConn, peer *structs.Peer) {
 	b := EncodeMessage(m)
 
-	conn.WriteToUDP(b, dest)
+	dest := net.UDPAddr(*peer)
+	conn.WriteToUDP(b, &dest)
 }
 
 // EncodeMessage serializes a Message in order to send it

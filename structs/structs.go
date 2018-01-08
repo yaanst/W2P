@@ -48,6 +48,13 @@ func PeerEquals(p1, p2 *Peer) bool {
 
 // Peers
 
+// NewPeers create a new Peers object (list of peer with a mutex)
+func NewPeers() *Peers {
+	return &Peers{
+		p: make([]*Peer, 5),
+	}
+}
+
 // Contains check if the Peers slice contains a Peer
 func (peers *Peers) Contains(peer *Peer) bool {
 	peers.mux.Lock()
@@ -91,3 +98,5 @@ func (wm *WebsiteMap) Set(website *Website) {
 	wm.w[website.Name] = website
 	wm.mux.Unlock()
 }
+
+// Website

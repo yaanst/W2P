@@ -16,21 +16,6 @@ import (
 const RSA_KEY_BITS int = 512
 const KEY_DIR string = "./keys/"
 
-// WebsiteKeyMap is a mapping from a website ID to its associated *rsa.PublicKey
-// used to verify signatures
-type WebsiteKeyMap map[string]*rsa.PublicKey
-
-// Set adds or updates an entry of the WebsiteKeyMap with the *rsa.PrivateKey
-// given in parameter.
-func (wkm *WebsiteKeyMap) Set(website string, key *rsa.PublicKey) {
-    (*wkm)[website] = key
-}
-// Get returns the *rsa.PrivateKey corresponding to the website or nil if it
-// does not exist
-func (wkm *WebsiteKeyMap) Get(website string) *rsa.PublicKey {
-    return (*wkm)[website]
-}
-
 // CheckError checks if there was an error.
 // If there was, it logs it and exits
 func CheckError(err error) {

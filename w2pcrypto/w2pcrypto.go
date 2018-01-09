@@ -4,91 +4,173 @@ package w2pcrypto
 
 import (
     "os"
+    "io/ioutil"
     "log"
     "crypto"
     "crypto/rsa"
     "crypto/rand"
+    "crypto/x509"
     "crypto/sha256"
-    "encoding/gob"
     "encoding/hex"
+    "encoding/pem"
 )
 
-const RSA_KEY_BITS int = 512
-const KEY_DIR string = "./keys/"
+const RsaKeyBits int = 1024
+const KeyFolder string = "./keys/"
 
-// CheckError checks if there was an error.
-// If there was, it logs it and exits
+// -----------
+// - Structs -
+// -----------
+
+type PublicKey struct {
+    *rsa.PublicKey
+}
+type PrivateKey struct {
+    *rsa.PrivateKey
+}
+
+// -----------
+// - Methods -
+// -----------
+
+// CheckError prints the error and exits if err is not nil
 func CheckError(err error) {
     if err != nil {
         log.Fatal(err)
     }
 }
 
-/*****************************
-            Crypto
-*****************************/
-
 // CreateKeyPair is a wrapper for the rsa.GenerateKey function.
 // It returns a *rsa.PrivateKey if no error is encountered.
-func CreateKey() *rsa.PrivateKey {
+func CreateKey() (PrivateKey, PublicKey) {
 	rng := rand.Reader
 
-    privkey, err := rsa.GenerateKey(rng, RSA_KEY_BITS)
+    key, err := rsa.GenerateKey(rng, RsaKeyBits)
     CheckError(err)
-    return privkey
+
+    privkey := PrivateKey{key}
+    pubkey := PublicKey{&key.PublicKey}
+    return privkey, pubkey
 }
 
-// SaveKey that saves the given private key to disk
-// It uses Gob encoding (https://blog.golang.org/gobs-of-data)
-func SaveKey(fileName string, key *rsa.PrivateKey) {
-    outFile, err := os.Create(KEY_DIR + fileName)
+// LoadPrivateKey loads the PEM encoded private key with the given filename
+// It returns a *PrivateKey
+func LoadPrivateKey(fileName string) *PrivateKey {
+    k, err := ioutil.ReadFile(KeyFolder + fileName)
     CheckError(err)
 
-    encoder := gob.NewEncoder(outFile)
-    err = encoder.Encode(key)
+    block, _ := pem.Decode(k)
+    if block == nil || block.Type != "RSA PRIVATE KEY" {
+        log.Fatal("Failed to decode PEM block containing private key")
+    }
+
+    key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
     CheckError(err)
-    outFile.Close()
+
+    return &PrivateKey{key}
 }
 
-// LoadKey loads the key with the given name
-// It returns a *rsa.PrivateKey (from which the public key can be retrieved)
-func LoadKey(fileName string) *rsa.PrivateKey {
-    var key rsa.PrivateKey
-
-    inFile, err := os.Open(KEY_DIR + fileName)
+// LoadPublicKey loads the PEM encoded public key with the given filename
+// It returns a *PublicKey
+func LoadPublicKey(fileName string) *PublicKey {
+    k, err := ioutil.ReadFile(KeyFolder + fileName)
     CheckError(err)
 
-    decoder := gob.NewDecoder(inFile)
-    err = decoder.Decode(&key)
-    CheckError(err)
-    inFile.Close()
+    block, _ := pem.Decode(k)
+    if block == nil || block.Type != "RSA PUBLIC KEY" {
+        log.Fatal("Failed to decode PEM block containing public key")
+    }
 
-    return &key
+    general_key, err := x509.ParsePKIXPublicKey(block.Bytes)
+    CheckError(err)
+    key, ok := general_key.(*rsa.PublicKey)
+    if !ok {
+        log.Fatal("Failed to load public key")
+    }
+    return &PublicKey{key}
 }
 
-// SignMessage takes in a *rsa.PrivateKey pointer and a message as a string.
+// PrivateKey
+
+// String returns a string representation of the PrivateKey
+func (key *PrivateKey) String() string {
+    pemdata := pem.EncodeToMemory(
+        &pem.Block {
+            Type: "RSA PRIVATE KEY",
+            Bytes: x509.MarshalPKCS1PrivateKey(key.PrivateKey),
+        },
+    )
+    return hex.EncodeToString(pemdata)
+}
+
+// Save stores the private in a PEM format onto the disk
+func (key *PrivateKey) Save(fileName string) {
+    outFile, err := os.Create(KeyFolder + fileName)
+    CheckError(err)
+
+    pem.Encode(
+        outFile,
+        &pem.Block {
+            Type: "RSA PRIVATE KEY",
+            Bytes: x509.MarshalPKCS1PrivateKey(key.PrivateKey),
+        },
+    )
+}
+
+// SignMessage takes in a *PrivateKey pointer and a message as a string.
 // It computes the SHA256 hash of the message and signs it.
 // It returns the signature as a string if no error is encountered
-func SignMessage(privkey *rsa.PrivateKey, msg string) string {
+func (key *PrivateKey) SignMessage(msg string) string {
 	rng := rand.Reader
 	message := []byte(msg)
 	hashed := sha256.Sum256(message)
 
-	signature, err := rsa.SignPKCS1v15(rng, privkey, crypto.SHA256, hashed[:])
+	signature, err := rsa.SignPKCS1v15(rng, key.PrivateKey, crypto.SHA256, hashed[:])
     CheckError(err)
 
     signature_str := hex.EncodeToString(signature)
     return signature_str
 }
 
+// PublicKey
+
+// String returns a string representation of the PublicKey
+func (key *PublicKey) String() string {
+    k, err := x509.MarshalPKIXPublicKey(key.PublicKey)
+    CheckError(err)
+    pemdata := pem.EncodeToMemory(
+        &pem.Block {
+            Type: "RSA PUBLIC KEY",
+            Bytes: k,
+        },
+    )
+    return hex.EncodeToString(pemdata)
+}
+
+// Save stores the public key in PEM format onto disk
+func (key *PublicKey) Save(fileName string) {
+    k, err := x509.MarshalPKIXPublicKey(key.PublicKey)
+    CheckError(err)
+
+    outFile, err := os.Create(KeyFolder + fileName)
+    CheckError(err)
+
+    pem.Encode(
+        outFile,
+        &pem.Block {
+            Type: "RSA PUBLIC KEY",
+            Bytes: k,
+        },
+    )
+}
+
 // VerifySignature takes in a *rsa.PrivateKey, a message and a signature.
 // It verifies if the signature is valid using the function rsa.VerifyPKCS1v15
 // It returns a boolean if a signature is valid or not
-func VerifySignature(pubkey *rsa.PublicKey, msg string, signature_str string) bool {
+func (key *PublicKey) VerifySignature(pubkey *rsa.PublicKey, msg string, signature_str string) bool {
 	message := []byte(msg)
 	hashed := sha256.Sum256(message)
 	signature, _ := hex.DecodeString(signature_str)
-
-	err := rsa.VerifyPKCS1v15(pubkey, crypto.SHA256, hashed[:], signature)
+	err := rsa.VerifyPKCS1v15(key.PublicKey, crypto.SHA256, hashed[:], signature)
     return (err == nil)
 }

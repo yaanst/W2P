@@ -1,0 +1,90 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100%; 
+    max-height: 100%; 
+    font-family:Sans-serif;
+    line-height: 1.5em;
+}
+
+#header {
+    position: absolute;
+    text-align: center;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 80px; 
+    overflow: hidden; /* Disables scrollbars on the header frame. To enable scrollbars, change "hidden" to "scroll" */
+    background: #98AFC7;
+}
+
+/*
+#nav {
+    position: absolute; 
+    top: 80px;
+    bottom: 0;
+    left: 0; 
+    width: 230px;
+    overflow: auto; // Scrollbars will appear on this frame only when there's enough content to require scrolling. To disable scrollbars, change to "hidden", or use "scroll" to enable permanent scrollbars
+    background: #C0D7EF;
+}
+*/
+
+#logo {
+    padding:10px;
+}
+
+main {
+    position: fixed;
+    top: 80px; /* Set this to the height of the header */
+    /*left: 230px; */
+    left: 0px;
+    right: 0;
+    bottom: 0;
+    overflow: auto; 
+    background: #fff;
+}
+
+.innertube {
+    margin: 15px; /* Provides padding for the content */
+    text-align: center;
+}
+
+p {
+    color: #555;
+}
+
+* html main{ 
+    height: 100%; 
+    width: 100%; 
+}
+
+#websites_section {
+    width: 40%;
+    margin:auto;
+}
+#websites_div {
+    height: 400px;
+    margin-bottom: 10px;
+}
+
+#websites_section_extra {
+    margin-top: 10px;
+    padding: 5px;
+    height: 110px;
+    background-color: #B6CDE5;
+}
+
+.border {
+    border: 1px solid black;
+}
+.scroll-auto {
+    overflow: auto;
+}
+.ul-no-decoration {
+    text-decoration: none;
+}
+.hidden {
+    display: none;
+}

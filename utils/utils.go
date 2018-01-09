@@ -41,3 +41,13 @@ func ScanDir(path string) []string {
 
 	return subfolders
 }
+
+// Contains check if a slice of string contains that particular string
+func Contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}

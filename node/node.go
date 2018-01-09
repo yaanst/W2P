@@ -2,6 +2,7 @@ package node
 
 import (
 	"os"
+	"strings"
 
 	"github.com/yaanst/W2P/structs"
 	"github.com/yaanst/W2P/utils"
@@ -96,10 +97,18 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 }
 
 // Search search for keywords match among all the websites on the network
-func (n *Node) Search(searchTerms string) []string {
+func (n *Node) Search(search string) []string {
+	terms := strings.Split(search, " ")
 
-	// TODO implement
+	var websites []*structs.Website
+	for _, term := range terms {
+		websites = append(websites, n.WebsiteMap.SearchKeyword(term)[:]...)
+	}
 
 	var results []string
+	for _, w := range websites {
+		results = append(results, w.Name)
+	}
+
 	return results
 }

@@ -8,62 +8,58 @@ import (
 	"strings"
 
 	"github.com/yaanst/W2P/node"
+	"github.com/yaanst/W2P/structs"
 	"github.com/yaanst/W2P/utils"
-	"github.com/yaanst/W2P/w2pcrypto"
 )
 
+// CheckError checks for an error and print it if any
 func CheckError(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-// List all folders in the WebsiteFolder
+// ReadWebsiteFolder lists all folders in the WebsiteFolder
 func ReadWebsiteFolder(writer http.ResponseWriter, request *http.Request) {
 	if request.Method == "GET" {
 		folders := utils.ScanDir(node.WebsiteDir)
-		json_data, err := json.Marshal(folders)
+		jsonData, err := json.Marshal(folders)
 		CheckError(err)
-		fmt.Fprint(writer, string(json_data))
+		fmt.Fprint(writer, string(jsonData))
 	}
 }
 
-// List all known websites
+// ListWebsites lists all known websites
 func ListWebsites(node node.Node) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == "GET" {
-			json_data, err := json.Marshal(node.WebsiteMap)
+			jsonData, err := json.Marshal(node.WebsiteMap)
 			CheckError(err)
-			fmt.Fprint(writer, string(json_data))
+			fmt.Fprint(writer, string(jsonData))
 		}
 	}
 }
 
-// Start seed a new website
-func SeedWebsite(node node.Node) http.HandlerFunc {
+// ImportWebsite imports a new website from the UI and add it to the
+// seeding websites
+func ImportWebsite(node node.Node) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == "POST" {
 			request.ParseForm()
+
 			name := strings.Join(request.Form["name"], "")
-			keywords := strings.Join(request.Form["keywords"], "")
+
+			keywordsString := strings.Join(request.Form["keywords"], "")
+			keywords := strings.Split(keywordsString, ",")
 
 			if name != "" {
-				privkey := w2pcrypto.CreateKey()
-				pubkey := &privkey.PublicKey
-				w2pcrypto.SaveKey(name+".key", privkey)
-
-				website := node.NewWebsite(name)
-				website.Keywords = strings.Split(keywords, ",")
-				website.PubKey = pubkey
-				website.Version = 1
-
-				// Probel, pubkey has no string representation
+				node.AddNewWebsite(name, keywords)
 			}
 		}
 	}
 }
 
-// /update
+// UpdateWebsite update a website already present in the Node
 func UpdateWebsite(node node.Node) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == "POST" {

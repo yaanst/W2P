@@ -1,8 +1,11 @@
 package node
 
 import (
-	"fmt"
+	"os"
+
 	"github.com/yaanst/W2P/structs"
+	"github.com/yaanst/W2P/utils"
+	//"github.com/yaanst/W2P/w2pcrypto"
 	//	"github.com/yaanst/W2P/comm"
 )
 
@@ -12,6 +15,10 @@ import (
 
 // WebsiteDir is the path to the directory containing all website
 const WebsiteDir string = "./website/"
+
+// MetadataFile is the file name of file which is present in every website in
+// the WebsiteMap
+const MetadataFile string = "/metadata"
 
 // SeedDir is the path to the directory containing all seeding binary archive
 const SeedDir string = "./seed/"
@@ -54,24 +61,29 @@ func NewNode(name, addrString, peersString string) *Node {
 // - Methods -
 // -----------
 
-// Init initialize a Node adding website already present
+// Init initialize a Node adding website already present on disk
 func (n *Node) Init() {
-	// TODO implement
-}
+	websitesNames := utils.ScanDir(WebsiteDir)
 
-// NewWebsite creates a new Website object using the directory it is in
-func (n *Node) NewWebsite(name string) *structs.Website {
-	seeders := structs.NewPeers()
-	seeders.Add(n.Addr)
-
-	// TODO finish implementation
-
-	return &structs.Website{
-		Name:    name,
-		Seeders: seeders,
+	for _, name := range websitesNames {
+		if _, err := os.Stat(WebsiteDir + name + MetadataFile); err == nil {
+			n.AddWebsite(name)
+		}
 	}
 }
 
-func main() {
-	fmt.Println("vim-go")
+// AddWebsite constructs a Website object that already has a metadatafile and
+// adds it to the WebsiteMap
+func (n *Node) AddWebsite(name string) {
+	website := structs.LoadWebsite(name)
+
+	n.WebsiteMap.Set(website)
+}
+
+// AddNewWebsite constructs a new website that has no metadatafile and adds
+// it to the WebsiteMap
+func (n *Node) AddNewWebsite(name string, keywords []string) {
+	seeders := structs.NewPeers()
+	seeders.Add(n.Addr)
+	// TODO implement
 }

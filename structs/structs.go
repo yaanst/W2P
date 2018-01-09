@@ -91,6 +91,18 @@ func NewWebsiteMap() *WebsiteMap {
 	}
 }
 
+// NewWebsite constructs a new Website data structure
+func NewWebsite(name string, seeders *Peers, keywords []string) *Website {
+	return &Website{
+		Name: name,
+	}
+}
+
+// LoadWebsite constructs a Website from a metadata file
+func LoadWebsite(name string) *Website {
+	return &Website{}
+}
+
 // NewRoutingTable constructs a RoutingTable object
 func NewRoutingTable() *RoutingTable {
 	return &RoutingTable{
@@ -160,3 +172,7 @@ func (wm *WebsiteMap) Set(website *Website) {
 }
 
 // Website
+
+// Save write/overwrite a metadata file in the website folder
+func (w *Website) Save() {
+}

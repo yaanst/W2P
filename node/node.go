@@ -47,12 +47,13 @@ func NewNode(name, addrString, peersString string) *Node {
 // - Methods -
 // -----------
 
-// Init initialize a Node adding website already present on disk
+// Init initialize a Node adding website already present on disk and checking
+// wether we have their metadata, also checking every dir is present
 func (n *Node) Init() {
 	websitesNames := utils.ScanDir(utils.WebsiteDir)
 
 	for _, name := range websitesNames {
-		if _, err := os.Stat(utils.WebsiteDir + name + utils.MetadataFile); err == nil {
+		if _, err := os.Stat(utils.MetadataDir + name); err == nil {
 			n.AddWebsite(name)
 		}
 	}
@@ -69,7 +70,30 @@ func (n *Node) AddWebsite(name string) {
 // AddNewWebsite constructs a new website that has no metadatafile and adds
 // it to the WebsiteMap
 func (n *Node) AddNewWebsite(name string, keywords []string) {
-	seeders := structs.NewPeers()
-	seeders.Add(n.Addr)
+	website := structs.NewWebsite(name, keywords)
+
+	website.Bundle()
+
+	website.GenPieces(utils.DefaultPieceLength)
+	website.Seeders.Add(n.Addr)
+	website.SaveMetadata()
+
+	n.WebsiteMap.Set(website)
+}
+
+// UpdateWebsite update a Website in the WebsiteMap when user modified
+// his website
+func (n *Node) UpdateWebsite(name string, keywords []string) {
+
 	// TODO implement
+
+}
+
+// Search search for keywords match among all the websites on the network
+func (n *Node) Search(searchTerms string) []string {
+
+	// TODO implement
+
+	var results []string
+	return results
 }

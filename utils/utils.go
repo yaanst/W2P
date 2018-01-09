@@ -12,9 +12,8 @@ import (
 // WebsiteDir is the path to the directory containing all website
 const WebsiteDir string = "./website/"
 
-// MetadataFile is the file name of file which is present in every website in
-// the WebsiteMap
-const MetadataFile string = "/metadata"
+// MetadataDir is the directory in which we save all serialization of websites
+const MetadataDir string = "./metadata/"
 
 // SeedDir is the path to the directory containing all seeding binary archive
 const SeedDir string = "./seed/"

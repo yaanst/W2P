@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yaanst/W2P/utils"
+	//"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/w2pcrypto"
 )
 
@@ -35,7 +35,7 @@ type Website struct {
 	Name        string
 	Seeders     *Peers
 	Keywords    []string
-	PubKey      string
+	PubKey      *w2pcrypto.PublicKey
 	PieceLength int
 	Pieces      string
 	Version     int
@@ -95,21 +95,18 @@ func NewWebsiteMap() *WebsiteMap {
 }
 
 // NewWebsite constructs a new Website data structure
-func NewWebsite(name string, seeders *Peers, keywords []string) *Website {
-	pieceLength := utils.DefaultPieceLength
-
-	pieces := ""
-
+func NewWebsite(name string, keywords []string) *Website {
 	privKey, pubKey := w2pcrypto.CreateKey()
+	privKey.Save(name)
 
-	// TODO implement
+	seeders := NewPeers()
 
 	return &Website{
-		Name:        name,
-		Seeders:     seeders,
-		Keywords:    keywords,
-		PieceLength: pieceLength,
-		Version:     1,
+		Name:     name,
+		Seeders:  seeders,
+		Keywords: keywords,
+		PubKey:   pubKey,
+		Version:  1,
 	}
 }
 
@@ -191,6 +188,24 @@ func (wm *WebsiteMap) Set(website *Website) {
 
 // Website
 
-// Save write/overwrite a metadata file in the website folder
-func (w *Website) Save() {
+// SaveMetadata write/overwrite a metadata file in the website folder
+func (w *Website) SaveMetadata() {
+
+	// TODO implement
+
+}
+
+// Bundle creates an archive of a website folder for seeding
+func (w *Website) Bundle() {
+
+	// TODO implement
+
+}
+
+// GenPieces generates the pieces from the website archive and set it in
+// the Website object
+func (w *Website) GenPieces(piecesLength int) {
+	w.PieceLength = piecesLength
+
+	// TODO implement
 }

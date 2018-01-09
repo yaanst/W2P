@@ -1,13 +1,16 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"strings"
 	"sync"
 
 	//"github.com/yaanst/W2P/utils"
+	"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/w2pcrypto"
 )
 
@@ -112,10 +115,18 @@ func NewWebsite(name string, keywords []string) *Website {
 
 // LoadWebsite constructs a Website from a metadata file
 func LoadWebsite(name string) *Website {
+	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// TODO implement
+	var website *Website
+	err = json.Unmarshal(jsonData, website)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	return &Website{}
+	return website
 }
 
 // NewRoutingTable constructs a RoutingTable object
@@ -190,9 +201,15 @@ func (wm *WebsiteMap) Set(website *Website) {
 
 // SaveMetadata write/overwrite a metadata file in the website folder
 func (w *Website) SaveMetadata() {
+	jsonData, err := json.Marshal(w)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// TODO implement
-
+	err = ioutil.WriteFile(utils.MetadataDir+w.Name, jsonData, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Bundle creates an archive of a website folder for seeding

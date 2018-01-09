@@ -6,6 +6,9 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/yaanst/W2P/utils"
+	"github.com/yaanst/W2P/w2pcrypto"
 )
 
 // -----------
@@ -93,13 +96,28 @@ func NewWebsiteMap() *WebsiteMap {
 
 // NewWebsite constructs a new Website data structure
 func NewWebsite(name string, seeders *Peers, keywords []string) *Website {
+	pieceLength := utils.DefaultPieceLength
+
+	pieces := ""
+
+	privKey, pubKey := w2pcrypto.CreateKey()
+
+	// TODO implement
+
 	return &Website{
-		Name: name,
+		Name:        name,
+		Seeders:     seeders,
+		Keywords:    keywords,
+		PieceLength: pieceLength,
+		Version:     1,
 	}
 }
 
 // LoadWebsite constructs a Website from a metadata file
 func LoadWebsite(name string) *Website {
+
+	// TODO implement
+
 	return &Website{}
 }
 

@@ -9,20 +9,6 @@ import (
 	//	"github.com/yaanst/W2P/comm"
 )
 
-// ---------
-// - Const -
-// ---------
-
-// WebsiteDir is the path to the directory containing all website
-const WebsiteDir string = "./website/"
-
-// MetadataFile is the file name of file which is present in every website in
-// the WebsiteMap
-const MetadataFile string = "/metadata"
-
-// SeedDir is the path to the directory containing all seeding binary archive
-const SeedDir string = "./seed/"
-
 // -----------
 // - Structs -
 // -----------
@@ -63,10 +49,10 @@ func NewNode(name, addrString, peersString string) *Node {
 
 // Init initialize a Node adding website already present on disk
 func (n *Node) Init() {
-	websitesNames := utils.ScanDir(WebsiteDir)
+	websitesNames := utils.ScanDir(utils.WebsiteDir)
 
 	for _, name := range websitesNames {
-		if _, err := os.Stat(WebsiteDir + name + MetadataFile); err == nil {
+		if _, err := os.Stat(utils.WebsiteDir + name + utils.MetadataFile); err == nil {
 			n.AddWebsite(name)
 		}
 	}

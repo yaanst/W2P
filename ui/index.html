@@ -1,0 +1,86 @@
+ <!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <link rel="stylesheet" href="main.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js">
+        </script>
+		<title>Web2Peer</title>
+    </head>
+
+    <body>		
+        <script src="main.js"></script>
+
+		<header id="header">
+			<div id="logo">
+				<h1>Web2Peer</h1>
+			</div>
+		</header>
+				
+		<main>
+			<div class="innertube">
+                <br />
+
+				<h1>websites</h1>
+
+                <section id="websites_section">
+                    <span id="current_filter"></span>
+                    <div id="websites_div" class="border auto-scroll">
+                        <ul id="websites_list" class="ul-no-decoration">
+                        </ul>
+                        <ul id="websites_list_filtered" class="ul-no-decoration hidden">
+                        </ul>
+                    </div>
+                    <input id="filter_keywords" type=text" name="filter_keywords"
+                                                  placeholder="keyword">
+                    <button id="filter_apply_button" type="button">
+                        Apply
+                    </button>
+                    <button id="filter_clear_button" type="button">
+                        Clear
+                    </button>
+                    <br/>
+                    <br/>
+                    <button id="share_website_button" type="button">
+                        Share new website
+                    </button>
+                    <button id="update_website_button" type="button">
+                        Update website
+                    </button>
+
+                    <div id="websites_section_extra" class="hidden">
+                        <div id="extra_form">
+                            <label for="extra_folders_select" class="share hidden">
+                                Select a website to share: 
+                            </label>
+                            <label for="extra_folders_select" class="update hidden">
+                                Select a website to update: 
+                            </label>
+                            <select id="extra_folders_select" name="website_name">
+                               <option value="" disabled selected>Select a website</option>
+                            </select>
+                            <br />
+                            <label for="keywords_input">
+                                Add a keyword representing your website:
+                            </label>
+                            <input id="keywords_input" type="text"
+                                                       name="keywords"
+                                                       placeholder="keyword">
+                        </div>
+
+                        <button id="websites_extra_button" type="button">
+                            OK
+                        </button>
+                    </div>
+                </section>
+
+                <br />
+                <br />
+
+
+				
+			</div>
+		</main>
+
+	</body>
+</html>

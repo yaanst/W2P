@@ -3,7 +3,6 @@ package node
 import (
 	"fmt"
 	"github.com/yaanst/W2P/structs"
-	"strings"
 	//	"github.com/yaanst/W2P/comm"
 )
 

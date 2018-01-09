@@ -4,9 +4,9 @@ package w2pcrypto
 
 import (
     "os"
-    "io/ioutil"
     "log"
     "crypto"
+    "io/ioutil"
     "crypto/rsa"
     "crypto/rand"
     "crypto/x509"

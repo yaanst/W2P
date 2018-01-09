@@ -1,11 +1,16 @@
 package structs
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -212,11 +217,112 @@ func (w *Website) SaveMetadata() {
 	}
 }
 
-// Bundle creates an archive of a website folder for seeding
+// Bundle creates a compressed archive of a website folder for seeding
 func (w *Website) Bundle() {
+	file, err := os.Create(utils.SeedDir + w.Name)
+	defer file.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// TODO implement
+	gzw := gzip.NewWriter(file)
+	defer gzw.Close()
 
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	err = filepath.Walk(utils.WebsiteDir+w.Name, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		header, err := tar.FileInfoHeader(info, info.Name())
+		if err != nil {
+			return err
+		}
+
+		header.Name = path
+
+		err = tw.WriteHeader(header)
+		if err != nil {
+			return err
+		}
+
+		// if not a file (e.g. a dir) don't copy content of it
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		defer f.Close()
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(tw, f)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Unbundle uncompress and unarchive a website to display it
+func (w *Website) Unbundle() {
+	archive, err := os.Open(utils.SeedDir + w.Name)
+	defer archive.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gzr, err := gzip.NewReader(archive)
+	defer gzr.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			_, err := os.Stat(target)
+			if err != nil {
+				err = os.MkdirAll(target, 0755)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			defer f.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			_, err = io.Copy(f, tr)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
 }
 
 // GenPieces generates the pieces from the website archive and set it in

@@ -1,9 +1,24 @@
 package structs
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
+
+	//"github.com/yaanst/W2P/utils"
+	"github.com/yaanst/W2P/utils"
+	"github.com/yaanst/W2P/w2pcrypto"
 )
 
 // -----------
@@ -30,7 +45,7 @@ type Website struct {
 	Name        string
 	Seeders     *Peers
 	Keywords    []string
-	PubKey      string
+	PubKey      *w2pcrypto.PublicKey
 	PieceLength int
 	Pieces      string
 	Version     int
@@ -47,10 +62,38 @@ type RoutingTable struct {
 // - Constructors -
 // ----------------
 
+// ParsePeer construct a Peer from a string of format "addr:port"
+func ParsePeer(peerString string) *Peer {
+	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	peer := Peer(*udpAddr)
+
+	return &peer
+}
+
+// ParsePeers construct a collection of type Peers from a string
+// format of string: addr:port,addr2:port2,addr3:port3
+func ParsePeers(peersString string) *Peers {
+	addrList := strings.Split(peersString, ",")
+
+	peers := NewPeers()
+
+	for _, addr := range addrList {
+		peer := ParsePeer(addr)
+		peers.Add(peer)
+	}
+
+	return peers
+}
+
 // NewPeers constructs a new Peers object (list of peer with a mutex)
 func NewPeers() *Peers {
 	return &Peers{
-		P: make([]*Peer, 5),
+		P: make([]*Peer, 0, 5),
 	}
 }
 
@@ -59,6 +102,38 @@ func NewWebsiteMap() *WebsiteMap {
 	return &WebsiteMap{
 		W: make(map[string]*Website),
 	}
+}
+
+// NewWebsite constructs a new Website data structure
+func NewWebsite(name string, keywords []string) *Website {
+	privKey, pubKey := w2pcrypto.CreateKey()
+	privKey.Save(name)
+
+	seeders := NewPeers()
+
+	return &Website{
+		Name:     name,
+		Seeders:  seeders,
+		Keywords: keywords,
+		PubKey:   pubKey,
+		Version:  1,
+	}
+}
+
+// LoadWebsite constructs a Website from a metadata file
+func LoadWebsite(name string) *Website {
+	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var website *Website
+	err = json.Unmarshal(jsonData, website)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return website
 }
 
 // NewRoutingTable constructs a RoutingTable object
@@ -129,4 +204,174 @@ func (wm *WebsiteMap) Set(website *Website) {
 	wm.Mux.Unlock()
 }
 
+// Get return the Website struct given its name
+func (wm *WebsiteMap) Get(name string) *Website {
+	wm.Mux.Lock()
+	website := wm.W[name]
+	wm.Mux.Unlock()
+
+	return website
+}
+
 // Website
+
+// SetKeywords sets the keywords for the Website
+func (w *Website) SetKeywords(keywords []string) {
+	w.Keywords = keywords
+}
+
+// IncVersion increment the version of a Website by 1
+func (w *Website) IncVersion() {
+	w.Version++
+}
+
+// SaveMetadata write/overwrite a metadata file in the website folder
+func (w *Website) SaveMetadata() {
+	jsonData, err := json.Marshal(w)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile(utils.MetadataDir+w.Name, jsonData, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Bundle creates a compressed archive of a website folder for seeding
+func (w *Website) Bundle() {
+	file, err := os.Create(utils.SeedDir + w.Name)
+	defer file.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gzw := gzip.NewWriter(file)
+	defer gzw.Close()
+
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	err = filepath.Walk(utils.WebsiteDir+w.Name, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		header, err := tar.FileInfoHeader(info, info.Name())
+		if err != nil {
+			return err
+		}
+
+		header.Name = path
+
+		err = tw.WriteHeader(header)
+		if err != nil {
+			return err
+		}
+
+		// if not a file (e.g. a dir) don't copy content of it
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		defer f.Close()
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(tw, f)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Unbundle uncompress and unarchive a website to display it
+func (w *Website) Unbundle() {
+	archive, err := os.Open(utils.SeedDir + w.Name)
+	defer archive.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gzr, err := gzip.NewReader(archive)
+	defer gzr.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			_, err := os.Stat(target)
+			if err != nil {
+				err = os.MkdirAll(target, 0755)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			defer f.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			_, err = io.Copy(f, tr)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+}
+
+// GenPieces generates the pieces from the website archive and set it in
+// the Website object
+func (w *Website) GenPieces(pieceLength int) {
+	w.PieceLength = pieceLength
+
+	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rest := data
+	var chunk []byte
+	var pieces string
+	for i := pieceLength; i < len(data); i += pieceLength {
+		chunk = rest[:i]
+
+		sum := sha256.Sum256(chunk)
+		hash := hex.EncodeToString(sum[:])
+		pieces = pieces + hash
+
+		rest = rest[i:]
+	}
+
+	sum := sha256.Sum256(rest)
+	hash := hex.EncodeToString(sum[:])
+	pieces = pieces + hash
+
+	w.Pieces = pieces
+}

@@ -90,6 +90,40 @@ func LoadPublicKey(fileName string) *PublicKey {
     return &PublicKey{key}
 }
 
+// StringToPublicKey converts an hex-encoded PEM public key into a PublicKey
+func StringToPublicKey(str string) *PublicKey {
+    pemdata, err := hex.DecodeString(str)
+    CheckError(err)
+
+    block, _ := pem.Decode(pemdata)
+    if block == nil || block.Type != "RSA PUBLIC KEY" {
+        log.Fatal("Failed to decode public key as string")
+    }
+    general_key, err := x509.ParsePKIXPublicKey(block.Bytes)
+    CheckError(err)
+    key, ok := general_key.(*rsa.PublicKey)
+    if !ok {
+        log.Fatal("Failed to cast into PublicKey")
+    }
+
+    return &PublicKey{key}
+}
+
+// StringToPublicKey converts an hex-encoded PEM private key into a PrivateKey
+func StringToPrivateKey(str string) *PrivateKey {
+    pemdata, err := hex.DecodeString(str)
+    CheckError(err)
+
+    block, _ := pem.Decode(pemdata)
+    if block == nil || block.Type != "RSA PRIVATE KEY" {
+        log.Fatal("Failed to decode public key as string")
+    }
+    key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+    CheckError(err)
+
+    return &PrivateKey{key}
+}
+
 // PrivateKey
 
 // String returns a string representation of the PrivateKey

@@ -2,7 +2,9 @@ package structs
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -47,10 +49,38 @@ type RoutingTable struct {
 // - Constructors -
 // ----------------
 
+// ParsePeer construct a Peer from a string of format "addr:port"
+func ParsePeer(peerString string) *Peer {
+	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	peer := Peer(*udpAddr)
+
+	return &peer
+}
+
+// ParsePeers construct a collection of type Peers from a string
+// format of string: addr:port,addr2:port2,addr3:port3
+func ParsePeers(peersString string) *Peers {
+	addrList := strings.Split(peersString, ",")
+
+	peers := NewPeers()
+
+	for _, addr := range addrList {
+		peer := ParsePeer(addr)
+		peers.Add(peer)
+	}
+
+	return peers
+}
+
 // NewPeers constructs a new Peers object (list of peer with a mutex)
 func NewPeers() *Peers {
 	return &Peers{
-		P: make([]*Peer, 5),
+		P: make([]*Peer, 0, 5),
 	}
 }
 

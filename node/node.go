@@ -84,8 +84,14 @@ func (n *Node) AddNewWebsite(name string, keywords []string) {
 // UpdateWebsite update a Website in the WebsiteMap when user modified
 // his website
 func (n *Node) UpdateWebsite(name string, keywords []string) {
+	website := n.WebsiteMap.Get(name)
 
-	// TODO implement
+	website.Bundle()
+
+	website.SetKeywords(keywords)
+	website.GenPieces(utils.DefaultPieceLength)
+	website.IncVersion()
+	website.SaveMetadata()
 
 }
 

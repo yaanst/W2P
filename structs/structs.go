@@ -204,7 +204,26 @@ func (wm *WebsiteMap) Set(website *Website) {
 	wm.Mux.Unlock()
 }
 
+// Get return the Website struct given its name
+func (wm *WebsiteMap) Get(name string) *Website {
+	wm.Mux.Lock()
+	website := wm.W[name]
+	wm.Mux.Unlock()
+
+	return website
+}
+
 // Website
+
+// SetKeywords sets the keywords for the Website
+func (w *Website) SetKeywords(keywords []string) {
+	w.Keywords = keywords
+}
+
+// IncVersion increment the version of a Website by 1
+func (w *Website) IncVersion() {
+	w.Version++
+}
 
 // SaveMetadata write/overwrite a metadata file in the website folder
 func (w *Website) SaveMetadata() {

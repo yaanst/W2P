@@ -213,7 +213,27 @@ func (wm *WebsiteMap) Get(name string) *Website {
 	return website
 }
 
+// SearchKeyword search for all the websites that have this keyword
+func (wm *WebsiteMap) SearchKeyword(keyword string) []*Website {
+	var websites []*Website
+
+	wm.Mux.Lock()
+	for _, website := range wm.W {
+		if utils.Contains(website.GetKeywords(), keyword) {
+			websites = append(websites, website)
+		}
+	}
+	wm.Mux.Unlock()
+
+	return websites
+}
+
 // Website
+
+// GetKeywords return the list of keywords of a website
+func (w *Website) GetKeywords() []string {
+	return w.Keywords
+}
 
 // SetKeywords sets the keywords for the Website
 func (w *Website) SetKeywords(keywords []string) {

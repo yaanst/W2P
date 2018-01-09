@@ -3,6 +3,8 @@ package structs
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -327,8 +329,30 @@ func (w *Website) Unbundle() {
 
 // GenPieces generates the pieces from the website archive and set it in
 // the Website object
-func (w *Website) GenPieces(piecesLength int) {
-	w.PieceLength = piecesLength
+func (w *Website) GenPieces(pieceLength int) {
+	w.PieceLength = pieceLength
 
-	// TODO implement
+	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rest := data
+	var chunk []byte
+	var pieces string
+	for i := pieceLength; i < len(data); i += pieceLength {
+		chunk = rest[:i]
+
+		sum := sha256.Sum256(chunk)
+		hash := hex.EncodeToString(sum[:])
+		pieces = pieces + hash
+
+		rest = rest[i:]
+	}
+
+	sum := sha256.Sum256(rest)
+	hash := hex.EncodeToString(sum[:])
+	pieces = pieces + hash
+
+	w.Pieces = pieces
 }

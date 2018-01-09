@@ -14,10 +14,12 @@ func main() {
     fmt.Println("args;",client_port, peers, public_addr)
 
     // Examples
-    privkey := w2pcrypto.CreateKey()
+    privkey, pubkey := w2pcrypto.CreateKey()
     fmt.Println("key1: %+v\n",privkey)
-    w2pcrypto.SaveKey("first.key", privkey)
+    privkey.Save("private.pem")
+    fmt.Println(pubkey.String())
 
-    privkey2 := w2pcrypto.LoadKey("first.key")
-    fmt.Println("key2: %+v\n",privkey2)
+    privkey2 := w2pcrypto.LoadPrivateKey("private.pem")
+    fmt.Println(privkey.String())
+    fmt.Println(privkey2.String())
 }

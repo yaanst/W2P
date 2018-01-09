@@ -8,21 +8,22 @@ import (
     "io/ioutil"
     "encoding/json"
 
-    "github.com/Yaanst/W2P/node"
-    "github.com/Yaanst/W2P/w2pcrypto"
+    "github.com/yaanst/W2P/node"
+    "github.com/yaanst/W2P/utils"
 )
 
 
+// CheckError prints and exits if an error occurs
 func CheckError(err error) {
     if err != nil {
         log.Fatal(err)
     }
 }
 
-// List all folders in the WebsiteFolder
-func ReadWebsiteFolder(writer http.ResponseWriter, request *http.Request) {
+//  ScanWebsiteFolder finds the user's websites names (/scan)
+func ScanWebsiteFolder(writer http.ResponseWriter, request *http.Request) {
     if request.Method == "GET" {
-        entries, err := ioutil.ReadDir(WebsiteFolder)
+        entries, err := ioutil.ReadDir(utils.WebsiteFolder)
         var folders []string
         for _, entry := range entries {
             if entry.IsDir() {
@@ -35,7 +36,7 @@ func ReadWebsiteFolder(writer http.ResponseWriter, request *http.Request) {
     }
 }
 
-// List all known websites
+// ListWebsites lists all known websites (/list)
 func ListWebsites(node node.Node) http.HandlerFunc {
     return func(writer http.ResponseWriter, request *http.Request) {
         if request.Method == "GET" {
@@ -46,8 +47,20 @@ func ListWebsites(node node.Node) http.HandlerFunc {
     }
 }
 
-// Start seed a new website
-func SeedWebsite(node node.Node) http.HandlerFunc {
+// ListWebsitesFiltered lists all known websites matching the keyword (/filter)
+func ListWebsitesFiltered(node node.Node) http.HandlerFunc {
+    return func(writer http.ResponseWriter, request *http.Request) {
+        if request.Method == "POST" {
+            request.ParseForm()
+            keywords := strings.Join(request.Form["keywords"], "")
+            websites := node.SearchWebsites(keywords)
+        }
+    }
+}
+
+
+// ShareWebsite creates and shares a new website (/share)
+func ShareWebsite(node node.Node) http.HandlerFunc {
     return func(writer http.ResponseWriter, request *http.Request) {
         if request.Method == "POST" {
             request.ParseForm()
@@ -55,26 +68,25 @@ func SeedWebsite(node node.Node) http.HandlerFunc {
             keywords := strings.Join(request.Form["keywords"], "")
 
             if name != "" {
-                privkey := w2pcrypto.CreateKey()
-                pubkey := &privkey.PublicKey
-                w2pcrypto.SaveKey(name + ".key", privkey)
 
                 website := node.NewWebsite(name)
-                website.Keywords = strings.Split(keywords, ",")
-                website.PubKey = pubkey
-                website.Version = 1
-
-                // Probel, pubkey has no string representation
             }
         }
     }
 }
 
-// /update
+// UpdateWebsite updates an existing website (/update)
 func UpdateWebsite(node node.Node) http.HandlerFunc {
     return func(writer http.ResponseWriter, request *http.Request) {
         if request.Method == "POST" {
+            request.ParseForm()
+            name := strings.Join(request.Form["name"], "")
+            keywords := strings.Join(request.Form["keywords"], "")
 
+            websites := node.UpdateWebsite(name, keywords)
+            json_data, err := json.Marshal(websites)
+            CheckError(err)
+            fmt.Fprint(writer, string(json_data))
         }
     }
 }

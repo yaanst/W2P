@@ -86,7 +86,6 @@ func (n *Node) Init() {
 		}
 	}
 
-	log.Println("test")
 	websitesNames := utils.ScanDir(utils.WebsiteDir)
 
 	for _, name := range websitesNames {
@@ -251,11 +250,13 @@ func (n *Node) Listen() {
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
+			log.Println("[RECEIVE] Heartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
 			heartbeat.Send(conn, orig) //TODO use routing table
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
+			log.Println("[RECEIVE] WebsiteMap from " + orig.String())
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
 			// Data
@@ -264,6 +265,7 @@ func (n *Node) Listen() {
 
 			// DataRequest
 			if msgData.Data != nil {
+				log.Println("[RECEIVE] DataRequest from " + orig.String())
 				go n.SendPiece(conn, message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
 			} else {
 				//TODO ??? (I think it is not needed because you open temporary
@@ -412,5 +414,14 @@ func (n *Node) SendPiece(conn *net.UDPConn, request *comm.Message, name, pieceTo
 			reply.Send(conn, n.Addr)
 			return
 		}
+	}
+}
+
+// AntiEntropy sends websitemap to all known peers at given time interval
+func (n *Node) AntiEntropy(timeout time.Duration) {
+	ticker := time.NewTicker(timeout)
+
+	for range ticker.C {
+		n.SendWebsiteMap()
 	}
 }

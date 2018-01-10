@@ -1,21 +1,18 @@
 package node
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"os"
 	"log"
 	"net"
-	"os"
-  "net"
-  "time"
-	"strings"
 	"sync"
 	"time"
+	"strings"
+	"encoding/hex"
+	"crypto/sha256"
 
 	"github.com/yaanst/W2P/comm"
 	"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/structs"
-	//"github.com/yaanst/W2P/w2pcrypto"
 )
 
 // -----------
@@ -125,24 +122,57 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
     return
 }
 
+// CheckPeer checks if peer is up and removes it from every location if not
+func (n *Node) CheckPeer(peer *structs.Peer) {
+    c := make(chan bool)
+    go n.HeartBeat(peer, c)
+
+    reachable := <-c
+    if !reachable {
+        n.Peers.Remove(peer)
+        n.WebsiteMap.RemovePeer(peer)
+    }
+}
+
+// MergeWebsiteMap merges a WebsiteMap into the local one
 func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
     localWM := n.WebsiteMap
-    localWM.Mux.Lock() //TODO unlock
 
-    for rKey, rWeb := range remoteWM. {
+    rIndices := remoteWM.GetIndices()
+    for _, rKey := range rIndices {
         lWeb := localWM.Get(rKey)
+        rWeb := remoteWM.Get(rKey)
 
         if lWeb != nil {
             if rWeb.Version > lWeb.Version {
-                rWeb.Seeders.Mux.Lock() //TODO unlock
-                lWeb.Seeders.Mux.Lock() //TODO unlock
-                for rPeer := range rWeb.Seeders {
-                    
+                // Update version
+                for lWeb.Version < rWeb.Version {
+                    lWeb.IncVersion()
+                }
+                // Update keywords
+                lWeb.SetKeywords(rWeb.GetKeywords())
+
+                // Update Pieces
+                lWeb.Pieces = rWeb.Pieces
+
+                // Update seeders
+                // For all remoteWebsite seeders
+                for _, rPeer := range rWeb.GetSeeders() {
+                    // If not already present -> add them to website directly
+                    if !lWeb.Seeders.Contains(&rPeer) {
+                        lWeb.Seeders.Add(&rPeer)
+                    }
+                }
+                // For all localWebsite seeders
+                for _, lPeer := range lWeb.GetSeeders() {
+                    // If not present -> remove them from  website
+                    if !rWeb.Seeders.Contains(&lPeer) {
+                        lWeb.Seeders.Remove(&lPeer)
+                    }
                 }
             }
         }
     }
-
 }
 
 // Listen listens for messages from other peers and acts on them
@@ -153,7 +183,7 @@ func (n *Node) Listen() {
     buffer := make([]byte, utils.ListenBufferSize)
 
     for {
-        msgLength, senderAddr, err := conn.ReadFromUDP(buffer)
+        _, senderAddr, err := conn.ReadFromUDP(buffer)
         utils.CheckError(err)
 
         sender := structs.Peer(*senderAddr)
@@ -170,11 +200,13 @@ func (n *Node) Listen() {
         if message.Meta == nil && message.Data == nil {
             originAddr := net.UDPAddr(*message.Orig)
             tmpConn, err := net.DialUDP("udp4", nil, &originAddr)
+            utils.CheckError(err)
             message := comm.NewHeartbeat(n.Addr, &sender)
             message.Send(tmpConn, &sender) //TODO use routing table
 
         // WebsiteMapUpdate
         } else if message.Meta != nil {
+            go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
         // Data
         } else if message.Data != nil {
@@ -182,15 +214,15 @@ func (n *Node) Listen() {
 
             // DataRequest
             if msgData.Data != nil {
-                
+                go n.SendPiece(senderAddr, msgData.Piece) //TODO: (gets data and sends it back)
 
             // DataReply
             } else {
+            //TODO ??? (I think it is not needed because you open temporary
+            //connections to download pices in RetrievePiece()
 
             }
         }
-
-
     }
 }
 

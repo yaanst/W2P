@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"log"
-    "time"
 	"io/ioutil"
+	"log"
+	"time"
 )
 
 // ---------
@@ -22,14 +22,14 @@ const SeedDir string = "./seed/"
 // DefaultPieceLength is the default length in bytes for a piece (8KB)
 const DefaultPieceLength int = 8192
 
-// ListenBufferize is the default size in bytes for buffer holding incoming
+// ListenBufferSize is the default size in bytes for buffer holding incoming
 // messages
 const ListenBufferSize int = 65536
 
 // HeartBeatBufferSize is the default size for buffer waiting for a heartbeat
 const HeartBeatBufferSize int = 512
 
-// HearTBeatTImeout is the default timeout for an answer from a peer
+// HeartBeatTimeout is the default timeout for an answer from a peer
 const HeartBeatTimeout time.Duration = time.Duration(10000000000) // 10s
 
 // -----------
@@ -38,15 +38,15 @@ const HeartBeatTimeout time.Duration = time.Duration(10000000000) // 10s
 
 // CheckError logs and exits if an error occurs
 func CheckError(err error) {
-    if err != nil {
-        log.Fatal(err)
-    }
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // ScanDir scans a folder and return a list of subfolder names
 func ScanDir(path string) []string {
 	entries, err := ioutil.ReadDir(path)
-    CheckError(err)
+	CheckError(err)
 
 	var subfolders []string
 	for _, entry := range entries {

@@ -19,6 +19,9 @@ const MetadataDir string = "./metadata/"
 // SeedDir is the path to the directory containing all seeding binary archive
 const SeedDir string = "./seed/"
 
+// KeyDir is the directory containing crypto keys
+const KeyDir string = "./keys/"
+
 // DefaultPieceLength is the default length in bytes for a piece (8KB)
 const DefaultPieceLength int = 8192
 

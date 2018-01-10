@@ -58,6 +58,34 @@ func NewNode(name, addrString, peersString string) *Node {
 // Init initialize a Node adding website already present on disk and checking
 // wether we have their metadata, also checking every dir is present
 func (n *Node) Init() {
+	if _, err := os.Stat(utils.MetadataDir); err == nil {
+		err := os.MkdirAll(utils.MetadataDir, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if _, err := os.Stat(utils.SeedDir); err == nil {
+		err := os.MkdirAll(utils.SeedDir, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if _, err := os.Stat(utils.WebsiteDir); err == nil {
+		err := os.MkdirAll(utils.WebsiteDir, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if _, err := os.Stat(utils.KeyDir); err == nil {
+		err := os.MkdirAll(utils.KeyDir, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	websitesNames := utils.ScanDir(utils.WebsiteDir)
 
 	for _, name := range websitesNames {

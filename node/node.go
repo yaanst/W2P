@@ -186,6 +186,7 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 
 	reachable := <-c
 	if !reachable {
+		log.Println("[HEARTBEAT] Peer", peer, "is down")
 		n.Peers.Remove(peer)
 		n.WebsiteMap.RemovePeer(peer)
 	} else {

@@ -78,16 +78,19 @@ func ParsePeer(peerString string) *Peer {
 // ParsePeers construct a collection of type Peers from a string
 // format of string: addr:port,addr2:port2,addr3:port3
 func ParsePeers(peersString string) *Peers {
-	addrList := strings.Split(peersString, ",")
+	if peersString != "" {
+		addrList := strings.Split(peersString, ",")
 
-	peers := NewPeers()
+		peers := NewPeers()
 
-	for _, addr := range addrList {
-		peer := ParsePeer(addr)
-		peers.Add(peer)
+		for _, addr := range addrList {
+			peer := ParsePeer(addr)
+			peers.Add(peer)
+		}
+
+		return peers
 	}
-
-	return peers
+	return NewPeers()
 }
 
 // NewPeers constructs a new Peers object (list of peer with a mutex)

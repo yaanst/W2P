@@ -141,30 +141,34 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 func (n *Node) SendWebsiteMap() {
 	//TODO: Send to ALL or subset or random but more frequently?
 	for _, p := range n.Peers.GetAll() {
-		log.Println("[SENDING] WebsiteMap to", p.String())
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
 		message.Send(n.Conn, &p)
+		log.Println("[SENT] WebsiteMap to", p.String())
 	}
 }
 
 // HeartBeat sends a hearbeat message to peer and waits for an answer or timeout
 func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
-	peerAddr := net.UDPAddr(*peer)
 	// Create a random local address for a new connection
 	tempPeer := &structs.Peer{
 		IP:   n.Addr.IP,
-		Port: n.Addr.Port + 100 + rand.Intn(2000),
+		Port: n.Addr.Port + 100 + rand.Intn(10000),
 		Zone: n.Addr.Zone,
 	}
 	lAddr := net.UDPAddr(*tempPeer)
-	conn, err := net.DialUDP("udp4", &lAddr, &peerAddr)
+
+	conn, err := net.ListenUDP("udp4", &lAddr)
+	defer conn.Close()
 	utils.CheckError(err)
+
 	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
-	message := comm.NewHeartbeat(n.Addr, peer)
+	message := comm.NewHeartbeat(tempPeer, peer)
 	buffer := make([]byte, utils.HeartBeatBufferSize)
 
 	message.Send(conn, peer)
+
+	log.Println("[SENT] Heartbeat to", peer.String())
 
 	size, err := conn.Read(buffer)
 	if err != nil {
@@ -184,6 +188,9 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 	if !reachable {
 		n.Peers.Remove(peer)
 		n.WebsiteMap.RemovePeer(peer)
+	} else {
+		log.Println("[HEARTBEAT] Peer", peer, "is up")
+		n.Peers.Add(peer)
 	}
 }
 
@@ -235,11 +242,9 @@ func (n *Node) Listen() {
 	log.Println("[LISTENING] on", n.Addr.String())
 
 	for {
-		_, senderAddr, err := n.Conn.ReadFromUDP(buffer)
+		_, _, err := n.Conn.ReadFromUDP(buffer)
 		utils.CheckError(err)
 
-		sender := structs.Peer(*senderAddr)
-		n.Peers.Add(&sender)
 		message := comm.DecodeMessage(buffer)
 		orig := message.Orig
 		dest := message.Dest
@@ -259,6 +264,7 @@ func (n *Node) Listen() {
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
 			log.Println("[RECEIVE] WebsiteMap from " + orig.String())
+			go n.CheckPeer(orig)
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
 			// Data
@@ -348,13 +354,14 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		// Create a random local address for a new connection
 		tempPeer := &structs.Peer{
 			IP:   n.Addr.IP,
-			Port: n.Addr.Port + 2100 + rand.Intn(5000),
+			Port: n.Addr.Port + 10100 + rand.Intn(20000),
 			Zone: n.Addr.Zone,
 		}
 		lAddr := net.UDPAddr(*tempPeer)
 
 		// try 2 deifferent ports
 		conn, err := net.DialUDP("udp4", &lAddr, &rAddr)
+		defer conn.Close()
 		if err != nil {
 			tempPeer.Port++
 			lAddr := net.UDPAddr(*tempPeer)

@@ -225,6 +225,22 @@ func (wm *WebsiteMap) Get(name string) *Website {
 	return website
 }
 
+// GetIndices returns of copy of all indices
+func (wm *WebsiteMap) GetIndices() []string {
+    var indices []string
+
+    wm.Mux.Lock()
+    defer wm.Mux.Unlock()
+
+    for idx, w := range wm.W {
+        if w != nil {
+            indices = append(indices, idx)
+        }
+    }
+
+    return indices
+}
+
 // SearchKeyword search for all the websites that have this keyword
 func (wm *WebsiteMap) SearchKeyword(keyword string) []*Website {
 	var websites []*Website
@@ -238,6 +254,16 @@ func (wm *WebsiteMap) SearchKeyword(keyword string) []*Website {
 	wm.Mux.Unlock()
 
 	return websites
+}
+
+// RemovePeer removes a peer from all websites' seeders list
+func (wm *WebsiteMap) RemovePeer(peer *Peer) {
+    wm.Mux.Lock()
+    defer wm.Mux.Unlock()
+
+    for _, w := range wm.W {
+        w.Seeders.Remove(peer)
+    }
 }
 
 // Website

@@ -1,10 +1,16 @@
 package node
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"log"
+	"net"
 	"os"
-    "net"
-    "time"
+  "net"
+  "time"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/yaanst/W2P/comm"
 	"github.com/yaanst/W2P/utils"
@@ -203,4 +209,88 @@ func (n *Node) Search(search string) []string {
 	}
 
 	return results
+}
+
+// RetrieveWebsite retrieve the archive of a website in order to display it itself
+func (n *Node) RetrieveWebsite(name string, ch chan int) {
+	website := n.WebsiteMap.Get(name)
+
+	pieces := website.Pieces
+	numPieces := len(pieces) / 8
+	chans := make([]chan []byte, numPieces)
+
+	for i := 0; i <= numPieces; i++ {
+		piece := pieces[:i*8]
+		chans[i] = make(chan []byte, 1)
+		go n.RetrievePiece(website, piece, chans[i])
+	}
+
+	archive, err := os.Create(utils.SeedDir + website.Name)
+	defer archive.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// write all pieces in archive at correct pos once retrieven
+	var mutex sync.Mutex
+	ok := make(chan int, numPieces)
+	for i, c := range chans {
+		go func() {
+			data := <-c
+			mutex.Lock()
+			archive.WriteAt(data[:], int64(i*utils.DefaultPieceLength))
+			mutex.Unlock()
+			ok <- 1
+		}()
+	}
+
+	// wait for all pieces to be written in archive
+	for okPiece := 0; okPiece < numPieces; {
+		okPiece += <-ok
+	}
+
+	// archive is now complete we can unbundle it and seed it
+	// TODO need to checksum this !
+
+	website.AddSeeder(n.Addr)
+
+	website.Unbundle()
+}
+
+// RetrievePiece retrieves a piece from a website archive and input it in a channel
+func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
+	for _, seeder := range website.GetSeeders() {
+		rAddr := net.UDPAddr(seeder)
+		conn, err := net.DialUDP("udp4", nil, &rAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
+
+		message := comm.NewDataRequest(n.Addr, &seeder, website.Name, piece)
+
+		message.Send(conn, &seeder)
+
+		// Maybe make a const for buffer size
+		buf := make([]byte, 65507)
+		_, err = conn.Read(buf)
+		if err != nil {
+			n.CheckPeer(&seeder)
+		} else {
+			reply := comm.DecodeMessage(buf)
+			// do some validity checks here
+			data := reply.Data.Data
+
+			sum := sha256.Sum256(data)
+			hash := hex.EncodeToString(sum[:])
+
+			if hash != piece {
+				log.Println("bad piece " + piece + " for " + website.Name)
+			} else {
+				c <- data
+				return
+			}
+		}
+	}
 }

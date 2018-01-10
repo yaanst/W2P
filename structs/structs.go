@@ -195,6 +195,18 @@ func (peers *Peers) Remove(peer *Peer) {
 	peers.Mux.Unlock()
 }
 
+// GetAll returns a copy of the list of Peer
+func (peers *Peers) GetAll() []Peer {
+	var peerList []Peer
+	peers.Mux.Lock()
+	for _, p := range peers.P {
+		peerList = append(peerList, *p)
+	}
+	peers.Mux.Unlock()
+
+	return peerList
+}
+
 // WebsiteMap
 
 // Set adds/updates a website to the website map
@@ -238,6 +250,16 @@ func (w *Website) GetKeywords() []string {
 // SetKeywords sets the keywords for the Website
 func (w *Website) SetKeywords(keywords []string) {
 	w.Keywords = keywords
+}
+
+// AddSeeder adds a seeder for this particular website
+func (w *Website) AddSeeder(peer *Peer) {
+	w.Seeders.Add(peer)
+}
+
+// GetSeeders gets all the seeders
+func (w *Website) GetSeeders() []Peer {
+	return w.Seeders.GetAll()
 }
 
 // IncVersion increment the version of a Website by 1

@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
+	"time"
 
 	"github.com/yaanst/W2P/node"
 )
@@ -15,10 +16,14 @@ func main() {
 	flag.StringVar(&addr, "addr", "", "Address of the node format IP:PORT")
 	flag.StringVar(&name, "name", "", "Name of the node")
 
-	fmt.Println("args: ", name, addr, peers)
+	log.Println("arg name: " + name)
+	log.Println("arg addr: " + addr)
+	log.Println("arg peers: " + peers)
 
 	node := node.NewNode(name, addr, peers)
 	node.Init()
+
+	go node.AntiEntropy(time.Second)
 
 	node.Listen()
 }

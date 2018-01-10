@@ -101,6 +101,18 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 
 }
 
+func (n *Node) SendWebsiteMap() {
+    addr := net.UDPAddr(*n.Addr)
+    conn, err := net.DialUDP("udp4", nil, &addr)
+    utils.CheckError(err)
+
+    //TODO: Send to ALL or subset or random but more frequently?
+    for _, p := range n.Peers.GetAll() {
+        message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
+        message.Send(conn, &p)
+    }
+}
+
 // HeartBeat sends a hearbeat message to peer and waits for an answer or timeout
 func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
     peerAddr := net.UDPAddr(*peer)
@@ -214,7 +226,7 @@ func (n *Node) Listen() {
 
             // DataRequest
             if msgData.Data != nil {
-                go n.SendPiece(senderAddr, msgData.Piece) //TODO: (gets data and sends it back)
+                //go n.SendPiece(senderAddr, msgData.Piece) //TODO: (gets data and sends it back)
 
             // DataReply
             } else {

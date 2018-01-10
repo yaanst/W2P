@@ -26,6 +26,7 @@ import (
 type Node struct {
 	Name         string
 	Addr         *structs.Peer
+	Conn         *net.UDPConn
 	Peers        *structs.Peers
 	RoutingTable *structs.RoutingTable
 	WebsiteMap   *structs.WebsiteMap
@@ -42,9 +43,14 @@ func NewNode(name, addrString, peersString string) *Node {
 	rt := structs.NewRoutingTable()
 	wm := structs.NewWebsiteMap()
 
+	connAddr := net.UDPAddr(*addr)
+	conn, err := net.ListenUDP("udp4", &connAddr)
+	utils.CheckError(err)
+
 	return &Node{
 		Name:         name,
 		Addr:         addr,
+		Conn:         conn,
 		Peers:        peers,
 		RoutingTable: rt,
 		WebsiteMap:   wm,
@@ -133,14 +139,11 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 
 // SendWebsiteMap shares the node's WebsiteMap with other nodes
 func (n *Node) SendWebsiteMap() {
-	addr := net.UDPAddr(*n.Addr)
-	conn, err := net.DialUDP("udp4", nil, &addr)
-	utils.CheckError(err)
-
 	//TODO: Send to ALL or subset or random but more frequently?
 	for _, p := range n.Peers.GetAll() {
+		log.Println("[SENDING] WebsiteMap to", p.String())
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
-		message.Send(conn, &p)
+		message.Send(n.Conn, &p)
 	}
 }
 
@@ -227,13 +230,12 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 
 // Listen listens for messages from other peers and acts on them
 func (n *Node) Listen() {
-	addr := net.UDPAddr(*n.Addr)
-	conn, err := net.ListenUDP("udp4", &addr)
-	utils.CheckError(err)
 	buffer := make([]byte, utils.ListenBufferSize)
 
+	log.Println("[LISTENING] on", n.Addr.String())
+
 	for {
-		_, senderAddr, err := conn.ReadFromUDP(buffer)
+		_, senderAddr, err := n.Conn.ReadFromUDP(buffer)
 		utils.CheckError(err)
 
 		sender := structs.Peer(*senderAddr)
@@ -252,7 +254,7 @@ func (n *Node) Listen() {
 		if message.Meta == nil && message.Data == nil {
 			log.Println("[RECEIVE] Heartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			heartbeat.Send(conn, orig) //TODO use routing table
+			heartbeat.Send(n.Conn, orig) //TODO use routing table
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
@@ -266,7 +268,7 @@ func (n *Node) Listen() {
 			// DataRequest
 			if msgData.Data != nil {
 				log.Println("[RECEIVE] DataRequest from " + orig.String())
-				go n.SendPiece(conn, message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
+				go n.SendPiece(message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
 			} else {
 				//TODO ??? (I think it is not needed because you open temporary
 				//connections to download pices in RetrievePiece()
@@ -392,7 +394,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 }
 
 // SendPiece sends a data reply with the data for the requested piece
-func (n *Node) SendPiece(conn *net.UDPConn, request *comm.Message, name, pieceToSend string) {
+func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
@@ -411,7 +413,7 @@ func (n *Node) SendPiece(conn *net.UDPConn, request *comm.Message, name, pieceTo
 			data = archiveData[offset : offset+website.PieceLength]
 			// need to check for checksum here
 			reply := comm.NewDataReply(request, data)
-			reply.Send(conn, n.Addr)
+			reply.Send(n.Conn, n.Addr)
 			return
 		}
 	}

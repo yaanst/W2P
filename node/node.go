@@ -1,18 +1,20 @@
 package node
 
 import (
-	"os"
+	"crypto/sha256"
+	"encoding/hex"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
-	"strings"
-	"encoding/hex"
-	"crypto/sha256"
 
 	"github.com/yaanst/W2P/comm"
-	"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/structs"
+	"github.com/yaanst/W2P/utils"
 )
 
 // -----------
@@ -101,141 +103,146 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 
 }
 
+// SendWebsiteMap shares the node's WebsiteMap with other nodes
 func (n *Node) SendWebsiteMap() {
-    addr := net.UDPAddr(*n.Addr)
-    conn, err := net.DialUDP("udp4", nil, &addr)
-    utils.CheckError(err)
+	addr := net.UDPAddr(*n.Addr)
+	conn, err := net.DialUDP("udp4", nil, &addr)
+	utils.CheckError(err)
 
-    //TODO: Send to ALL or subset or random but more frequently?
-    for _, p := range n.Peers.GetAll() {
-        message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
-        message.Send(conn, &p)
-    }
+	//TODO: Send to ALL or subset or random but more frequently?
+	for _, p := range n.Peers.GetAll() {
+		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
+		message.Send(conn, &p)
+	}
 }
 
 // HeartBeat sends a hearbeat message to peer and waits for an answer or timeout
 func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
-    peerAddr := net.UDPAddr(*peer)
-    conn, err := net.DialUDP("udp4", nil, &peerAddr)
-    utils.CheckError(err)
-    conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
+	peerAddr := net.UDPAddr(*peer)
+	// Create a random local address for a new connection
+	tempPeer := &structs.Peer{
+		IP:   n.Addr.IP,
+		Port: n.Addr.Port + 100 + rand.Intn(2000),
+		Zone: n.Addr.Zone,
+	}
+	lAddr := net.UDPAddr(*tempPeer)
+	conn, err := net.DialUDP("udp4", &lAddr, &peerAddr)
+	utils.CheckError(err)
+	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
-    message := comm.NewHeartbeat(n.Addr, peer)
-    buffer := make([]byte, utils.HeartBeatBufferSize)
+	message := comm.NewHeartbeat(n.Addr, peer)
+	buffer := make([]byte, utils.HeartBeatBufferSize)
 
-    message.Send(conn, peer)
+	message.Send(conn, peer)
 
-    size, err := conn.Read(buffer)
-    if err != nil {
-        reachable <- false
-    } else if size > 0 {
-        reachable <- true
-    }
-    return
+	size, err := conn.Read(buffer)
+	if err != nil {
+		reachable <- false
+	} else if size > 0 {
+		reachable <- true
+	}
+	return
 }
 
 // CheckPeer checks if peer is up and removes it from every location if not
 func (n *Node) CheckPeer(peer *structs.Peer) {
-    c := make(chan bool)
-    go n.HeartBeat(peer, c)
+	c := make(chan bool)
+	go n.HeartBeat(peer, c)
 
-    reachable := <-c
-    if !reachable {
-        n.Peers.Remove(peer)
-        n.WebsiteMap.RemovePeer(peer)
-    }
+	reachable := <-c
+	if !reachable {
+		n.Peers.Remove(peer)
+		n.WebsiteMap.RemovePeer(peer)
+	}
 }
 
 // MergeWebsiteMap merges a WebsiteMap into the local one
 func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
-    localWM := n.WebsiteMap
+	localWM := n.WebsiteMap
 
-    rIndices := remoteWM.GetIndices()
-    for _, rKey := range rIndices {
-        lWeb := localWM.Get(rKey)
-        rWeb := remoteWM.Get(rKey)
+	rIndices := remoteWM.GetIndices()
+	for _, rKey := range rIndices {
+		lWeb := localWM.Get(rKey)
+		rWeb := remoteWM.Get(rKey)
 
-        if lWeb != nil {
-            if rWeb.Version > lWeb.Version {
-                // Update version
-                for lWeb.Version < rWeb.Version {
-                    lWeb.IncVersion()
-                }
-                // Update keywords
-                lWeb.SetKeywords(rWeb.GetKeywords())
+		if lWeb != nil {
+			if rWeb.Version > lWeb.Version {
+				// Update version
+				for lWeb.Version < rWeb.Version {
+					lWeb.IncVersion()
+				}
+				// Update keywords
+				lWeb.SetKeywords(rWeb.GetKeywords())
 
-                // Update Pieces
-                lWeb.Pieces = rWeb.Pieces
+				// Update Pieces
+				lWeb.Pieces = rWeb.Pieces
 
-                // Update seeders
-                // For all remoteWebsite seeders
-                for _, rPeer := range rWeb.GetSeeders() {
-                    // If not already present -> add them to website directly
-                    if !lWeb.Seeders.Contains(&rPeer) {
-                        lWeb.Seeders.Add(&rPeer)
-                    }
-                }
-                // For all localWebsite seeders
-                for _, lPeer := range lWeb.GetSeeders() {
-                    // If not present -> remove them from  website
-                    if !rWeb.Seeders.Contains(&lPeer) {
-                        lWeb.Seeders.Remove(&lPeer)
-                    }
-                }
-            }
-        }
-    }
+				// Update seeders
+				// For all remoteWebsite seeders
+				for _, rPeer := range rWeb.GetSeeders() {
+					// If not already present -> add them to website directly
+					if !lWeb.Seeders.Contains(&rPeer) {
+						lWeb.Seeders.Add(&rPeer)
+					}
+				}
+				// For all localWebsite seeders
+				for _, lPeer := range lWeb.GetSeeders() {
+					// If not present -> remove them from  website
+					if !rWeb.Seeders.Contains(&lPeer) {
+						lWeb.Seeders.Remove(&lPeer)
+					}
+				}
+			}
+		}
+	}
 }
 
 // Listen listens for messages from other peers and acts on them
 func (n *Node) Listen() {
-    addr := net.UDPAddr(*n.Addr)
-    conn, err := net.ListenUDP("udp4", &addr)
-    utils.CheckError(err)
-    buffer := make([]byte, utils.ListenBufferSize)
+	addr := net.UDPAddr(*n.Addr)
+	conn, err := net.ListenUDP("udp4", &addr)
+	utils.CheckError(err)
+	buffer := make([]byte, utils.ListenBufferSize)
 
-    for {
-        _, senderAddr, err := conn.ReadFromUDP(buffer)
-        utils.CheckError(err)
+	for {
+		_, senderAddr, err := conn.ReadFromUDP(buffer)
+		utils.CheckError(err)
 
-        sender := structs.Peer(*senderAddr)
-        n.Peers.Add(&sender)
-        message := comm.DecodeMessage(buffer)
+		sender := structs.Peer(*senderAddr)
+		n.Peers.Add(&sender)
+		message := comm.DecodeMessage(buffer)
+		orig := message.Orig
+		dest := message.Dest
 
-        // Forward message
-        if !structs.PeerEquals(&sender, n.Addr) {
-            //TODO routing table
-            continue
-        }
+		// Forward message
+		if !structs.PeerEquals(dest, n.Addr) {
+			//TODO routing table
+			continue
+		}
 
-        // HeartBeat
-        if message.Meta == nil && message.Data == nil {
-            originAddr := net.UDPAddr(*message.Orig)
-            tmpConn, err := net.DialUDP("udp4", nil, &originAddr)
-            utils.CheckError(err)
-            message := comm.NewHeartbeat(n.Addr, &sender)
-            message.Send(tmpConn, &sender) //TODO use routing table
+		// HeartBeat
+		if message.Meta == nil && message.Data == nil {
+			heartbeat := comm.NewHeartbeat(n.Addr, orig)
+			heartbeat.Send(conn, orig) //TODO use routing table
 
-        // WebsiteMapUpdate
-        } else if message.Meta != nil {
-            go n.MergeWebsiteMap(message.Meta.WebsiteMap)
+			// WebsiteMapUpdate
+		} else if message.Meta != nil {
+			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
-        // Data
-        } else if message.Data != nil {
-            msgData := message.Data
+			// Data
+		} else if message.Data != nil {
+			msgData := message.Data
 
-            // DataRequest
-            if msgData.Data != nil {
-                //go n.SendPiece(senderAddr, msgData.Piece) //TODO: (gets data and sends it back)
+			// DataRequest
+			if msgData.Data != nil {
+				go n.SendPiece(conn, message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
+			} else {
+				//TODO ??? (I think it is not needed because you open temporary
+				//connections to download pices in RetrievePiece()
 
-            // DataReply
-            } else {
-            //TODO ??? (I think it is not needed because you open temporary
-            //connections to download pices in RetrievePiece()
-
-            }
-        }
-    }
+			}
+		}
+	}
 }
 
 // Search search for keywords match among all the websites on the network
@@ -305,14 +312,28 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	for _, seeder := range website.GetSeeders() {
 		rAddr := net.UDPAddr(seeder)
-		conn, err := net.DialUDP("udp4", nil, &rAddr)
+		// Create a random local address for a new connection
+		tempPeer := &structs.Peer{
+			IP:   n.Addr.IP,
+			Port: n.Addr.Port + 2100 + rand.Intn(5000),
+			Zone: n.Addr.Zone,
+		}
+		lAddr := net.UDPAddr(*tempPeer)
+
+		// try 2 deifferent ports
+		conn, err := net.DialUDP("udp4", &lAddr, &rAddr)
 		if err != nil {
-			log.Fatal(err)
+			tempPeer.Port++
+			lAddr := net.UDPAddr(*tempPeer)
+			conn, err = net.DialUDP("udp4", &lAddr, &rAddr)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 
 		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
-		message := comm.NewDataRequest(n.Addr, &seeder, website.Name, piece)
+		message := comm.NewDataRequest(tempPeer, &seeder, website.Name, piece)
 
 		message.Send(conn, &seeder)
 
@@ -335,6 +356,32 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 				c <- data
 				return
 			}
+		}
+	}
+}
+
+// SendPiece sends a data reply with the data for the requested piece
+func (n *Node) SendPiece(conn *net.UDPConn, request *comm.Message, name, pieceToSend string) {
+	website := n.WebsiteMap.Get(name)
+
+	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pieces := website.Pieces
+	numPieces := len(pieces) / 8
+
+	var data []byte
+	for i := 0; i <= numPieces; i++ {
+		piece := pieces[:i*8]
+		if piece == pieceToSend {
+			offset := i * website.PieceLength
+			data = archiveData[offset : offset+website.PieceLength]
+			// need to check for checksum here
+			reply := comm.NewDataReply(request, data)
+			reply.Send(conn, n.Addr)
+			return
 		}
 	}
 }

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	  "fmt"
+    "fmt"
     "log"
     "strings"
     "net/http"
@@ -12,19 +12,12 @@ import (
     "github.com/yaanst/W2P/utils"
 )
 
-// CheckError logs and exits if an error occurs
-func CheckError(err error) {
-    if err != nil {
-        log.Fatal(err)
-    }
-}
-
 //  ScanWebsiteFolder finds the user's websites names (/scan)
 func ScanWebsiteFolder(writer http.ResponseWriter, request *http.Request) {
     if request.Method == "GET" {
         folders := utils.ScanDir(node.WebsiteDir)
 		    jsonData, err := json.Marshal(folders)
-		    CheckError(err)
+		    utils.CheckError(err)
 		    fmt.Fprint(writer, string(jsonData))
     }
 }
@@ -34,7 +27,7 @@ func ListWebsites(node node.Node) http.HandlerFunc {
     return func(writer http.ResponseWriter, request *http.Request) {
 		    if request.Method == "GET" {
 			      jsonData, err := json.Marshal(node.WebsiteMap)
-			      CheckError(err)
+			      utils.CheckError(err)
             fmt.Fprint(writer, string(jsonData))
         }
     }
@@ -46,16 +39,16 @@ func ImportWebsite(node node.Node) http.HandlerFunc {
     return func(writer http.ResponseWriter, request *http.Request) {
         if request.Method == "POST" {
             request.ParseForm()
-      			name := strings.Join(request.Form["name"], "")
+            name := strings.Join(request.Form["name"], "")
 
-			      keywordsString := strings.Join(request.Form["keywords"], "")
-			      keywords := strings.Split(keywordsString, ",")
+            keywordsString := strings.Join(request.Form["keywords"], "")
+            keywords := strings.Split(keywordsString, ",")
 
-			      if name != "" {
-				        node.AddNewWebsite(name, keywords)
-			      }
-		    }
-	  }
+            if name != "" {
+                node.AddNewWebsite(name, keywords)
+            }
+        }
+    }
 }
 
 // UpdateWebsite updates an existing website (/update)
@@ -68,7 +61,7 @@ func UpdateWebsite(node node.Node) http.HandlerFunc {
 
             websites := node.UpdateWebsite(name, keywords)
             json_data, err := json.Marshal(websites)
-            CheckError(err)
+            utils.CheckError(err)
             fmt.Fprint(writer, string(json_data))
         }
     }

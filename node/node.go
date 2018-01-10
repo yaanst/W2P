@@ -35,7 +35,7 @@ type Node struct {
 // - Constructors -
 // ----------------
 
-// NewNode construct a fresh new Node (no rt and no wm)
+// NewNode construct a fresh new Node (enmpty rt and no wm)
 func NewNode(name, addrString, peersString string) *Node {
 	addr := structs.ParsePeer(addrString)
 	peers := structs.ParsePeers(peersString)

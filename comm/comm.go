@@ -68,6 +68,7 @@ func NewDataReply(request *Message, data []byte) *Message {
 
 // NewMeta construct a Message that contains a WebsiteMap
 func NewMeta(orig, dest *structs.Peer, wm *structs.WebsiteMap) *Message {
+
 	meta := &Meta{
 		WebsiteMap: wm,
 	}

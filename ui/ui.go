@@ -62,12 +62,4 @@ func UpdateWebsite(node node.Node) http.HandlerFunc {
 			node.UpdateWebsite(name, keywords)
 		}
 	}
-
-// ServeWebsite looks for the files belonging to a website and serves them
-func ServeWebsite(writer http.ResponseWriter, request *http.Request) {
-    splitPath := strings.Split(request.URL.EscapedPath(), "/")
-    websiteName := splitPath[:len(splitPath) - 1]
-
-    fs := http.FileServer(http.Dir(utils.WebsiteFolder + websiteName))
-    http.Handle("/", fs)
 }

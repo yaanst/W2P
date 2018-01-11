@@ -6,7 +6,16 @@ import (
 	"time"
 
 	"github.com/yaanst/W2P/node"
+    "github.com/husobee/vestigo"
 )
+
+func ServeWebsite(w http.ResponseWriter, r *http.Request) {
+    name := vestigo.Param(r, "name")
+    path := utils.WebsiteDir + name
+
+    fs := http.FileServer(http.Dir(path))
+    fs.ServeHTTP(w,r)
+}
 
 func main() {
 	//clientPort := flag.String("client-port", "4000", "Port on which you connect the browser")
@@ -27,4 +36,8 @@ func main() {
 	go node.AntiEntropy(time.Second)
 
 	node.Listen()
+
+    router := vestigo.NewRouter()
+    router.Get("/", http:FileServer(http.Dir("ui/website")))
+    router.Get("/w/:name", ui.Ser
 }

@@ -6,7 +6,12 @@
 
 ### Installation
 
-In order to use W2P simply clone the repo and build it
+At first get its dependencies
+```bash
+go get github.com/husobee/vestigo
+```
+
+And then to use it simply clone the repo and build it
 ```bash
 go get github.com/yaanst/W2P
 ```
@@ -21,3 +26,25 @@ W2P -name="A" -addr=127.0.0.1:10000 -peers="127.0.0.1:10001"
 - **name** is the name of the node your want to run
 - **addr** is the IPv4 address on which your node will listen for other nodes
 - **peers** is a list of already runing nodes which will help to enter the network
+
+## Features
+
+The idea for this project is to build a p2p network capable of serving distributed static websites. It includes the following functionnalities:
+ - Browsing websites
+ - Updating a website already created
+ - Searching by keywrds
+ - Integrity checks 
+ - Browser based user interface
+ 
+## Status
+
+What is working:
+ - User interface
+ - Integrity (signing, verifying, creating and storing keys)
+ - Search
+ - Download
+ - Upadte
+ 
+What still needs working on:
+ - Communication between peers
+ - Dynamically serving websites' folders

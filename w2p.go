@@ -1,25 +1,30 @@
 package main
 
 import (
-    "fmt"
-    "flag"
-    "github.com/yaanst/W2P/w2pcrypto"
+	"flag"
+	"log"
+	"time"
+
+	"github.com/yaanst/W2P/node"
 )
 
 func main() {
-    client_port := flag.String("client-port", "4000", "Port on which you connect the browser")
-    peers := flag.String("peers", "", "Comma-separated list of peers in the form of IP:PORT")
-    public_addr := flag.String("public-addr", "", "Address used to communicate with other peers in the form of IP:PORT")
+	//clientPort := flag.String("client-port", "4000", "Port on which you connect the browser")
+	//publicAddr := flag.String("public-addr", "", "Address used to communicate with other peers in the form of IP:PORT")
+	var name, addr, peers string
+	flag.StringVar(&name, "name", "test", "Name of the node")
+	flag.StringVar(&addr, "addr", "", "Address of the node format IP:PORT")
+	flag.StringVar(&peers, "peers", "", "Comma-separated list of peers in the form of IP:PORT")
+	flag.Parse()
 
-    fmt.Println("args;",client_port, peers, public_addr)
+	log.Println("arg name:", name)
+	log.Println("arg addr:", addr)
+	log.Println("arg peers:", peers)
 
-    // Examples
-    privkey, pubkey := w2pcrypto.CreateKey()
-    fmt.Println("key1: %+v\n",privkey)
-    privkey.Save("private.pem")
-    fmt.Println(pubkey.String())
+	node := node.NewNode(name, addr, peers)
+	node.Init()
 
-    privkey2 := w2pcrypto.LoadPrivateKey("private.pem")
-    fmt.Println(privkey.String())
-    fmt.Println(privkey2.String())
+	go node.AntiEntropy(time.Second)
+
+	node.Listen()
 }

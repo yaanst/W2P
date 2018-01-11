@@ -30,13 +30,13 @@ type Peer net.UDPAddr
 
 // Peers is a collection of Peer
 type Peers struct {
-	Mux sync.Mutex
+	mux sync.Mutex
 	P   []*Peer
 }
 
 // WebsiteMap is a map from a Website PubKey to the Website
 type WebsiteMap struct {
-	Mux sync.Mutex
+	mux sync.Mutex
 	W   map[string]*Website
 }
 
@@ -54,7 +54,7 @@ type Website struct {
 // RoutingTable is a table which keeps in memory possible route for a dest
 // if a Peer is not directly reachable
 type RoutingTable struct {
-	Mux sync.Mutex
+	mux sync.Mutex
 	R   map[string]*Peers
 }
 
@@ -78,16 +78,19 @@ func ParsePeer(peerString string) *Peer {
 // ParsePeers construct a collection of type Peers from a string
 // format of string: addr:port,addr2:port2,addr3:port3
 func ParsePeers(peersString string) *Peers {
-	addrList := strings.Split(peersString, ",")
+	if peersString != "" {
+		addrList := strings.Split(peersString, ",")
 
-	peers := NewPeers()
+		peers := NewPeers()
 
-	for _, addr := range addrList {
-		peer := ParsePeer(addr)
-		peers.Add(peer)
+		for _, addr := range addrList {
+			peer := ParsePeer(addr)
+			peers.Add(peer)
+		}
+
+		return peers
 	}
-
-	return peers
+	return NewPeers()
 }
 
 // NewPeers constructs a new Peers object (list of peer with a mutex)
@@ -162,29 +165,29 @@ func (p *Peer) String() string {
 
 // Contains check if the Peers slice contains a Peer
 func (peers *Peers) Contains(peer *Peer) bool {
-	peers.Mux.Lock()
+	peers.mux.Lock()
 	for _, p := range peers.P {
 		if PeerEquals(p, peer) {
-			peers.Mux.Unlock()
+			peers.mux.Unlock()
 			return true
 		}
 	}
-	peers.Mux.Unlock()
+	peers.mux.Unlock()
 	return false
 }
 
 // Add adds a Peer to the Peers if not already present
 func (peers *Peers) Add(peer *Peer) {
 	if !peers.Contains(peer) {
-		peers.Mux.Lock()
+		peers.mux.Lock()
 		peers.P = append(peers.P, peer)
-		peers.Mux.Unlock()
+		peers.mux.Unlock()
 	}
 }
 
 // Remove removes a Peer from the Peers
 func (peers *Peers) Remove(peer *Peer) {
-	peers.Mux.Lock()
+	peers.mux.Lock()
 	for i, p := range peers.P {
 		if PeerEquals(p, peer) {
 			// cut slice in 2 part and append without i-th element inbetween
@@ -192,40 +195,78 @@ func (peers *Peers) Remove(peer *Peer) {
 			break
 		}
 	}
-	peers.Mux.Unlock()
+	peers.mux.Unlock()
+}
+
+// GetAll returns a copy of the list of Peer
+func (peers *Peers) GetAll() []Peer {
+	var peerList []Peer
+	peers.mux.Lock()
+	for _, p := range peers.P {
+		peerList = append(peerList, *p)
+	}
+	peers.mux.Unlock()
+
+	return peerList
 }
 
 // WebsiteMap
 
 // Set adds/updates a website to the website map
 func (wm *WebsiteMap) Set(website *Website) {
-	wm.Mux.Lock()
+	wm.mux.Lock()
 	wm.W[website.Name] = website
-	wm.Mux.Unlock()
+	wm.mux.Unlock()
 }
 
 // Get return the Website struct given its name
 func (wm *WebsiteMap) Get(name string) *Website {
-	wm.Mux.Lock()
+	wm.mux.Lock()
 	website := wm.W[name]
-	wm.Mux.Unlock()
+	wm.mux.Unlock()
 
 	return website
+}
+
+// GetIndices returns of copy of all indices
+func (wm *WebsiteMap) GetIndices() []string {
+	var indices []string
+
+	wm.mux.Lock()
+	defer wm.mux.Unlock()
+
+	for idx, w := range wm.W {
+		if w != nil {
+			indices = append(indices, idx)
+		}
+	}
+
+	return indices
 }
 
 // SearchKeyword search for all the websites that have this keyword
 func (wm *WebsiteMap) SearchKeyword(keyword string) []*Website {
 	var websites []*Website
 
-	wm.Mux.Lock()
+	wm.mux.Lock()
 	for _, website := range wm.W {
 		if utils.Contains(website.GetKeywords(), keyword) {
 			websites = append(websites, website)
 		}
 	}
-	wm.Mux.Unlock()
+	wm.mux.Unlock()
 
 	return websites
+}
+
+// RemovePeer removes a peer from all websites' seeders list
+func (wm *WebsiteMap) RemovePeer(peer *Peer) {
+	wm.mux.Lock()
+	defer wm.mux.Unlock()
+
+	for _, w := range wm.W {
+		w.Seeders.Remove(peer)
+	}
 }
 
 // Website
@@ -238,6 +279,16 @@ func (w *Website) GetKeywords() []string {
 // SetKeywords sets the keywords for the Website
 func (w *Website) SetKeywords(keywords []string) {
 	w.Keywords = keywords
+}
+
+// AddSeeder adds a seeder for this particular website
+func (w *Website) AddSeeder(peer *Peer) {
+	w.Seeders.Add(peer)
+}
+
+// GetSeeders gets all the seeders
+func (w *Website) GetSeeders() []Peer {
+	return w.Seeders.GetAll()
 }
 
 // IncVersion increment the version of a Website by 1

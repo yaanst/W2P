@@ -6,12 +6,7 @@
 
 ### Installation
 
-At first get its dependencies
-```bash
-go get github.com/husobee/vestigo
-```
-
-And then to use it simply clone the repo and build it
+Simply clone the repo and build it
 ```bash
 go get github.com/yaanst/W2P
 ```
@@ -20,12 +15,13 @@ go get github.com/yaanst/W2P
 
 W2P is run with the cli and you need to precise a few argument to the node
 ```bash
-W2P -name="A" -addr=127.0.0.1:10000 -peers="127.0.0.1:10001"
+W2P -name="NodeA" -addr=127.0.0.1:10000 -peers="127.0.0.1:10001" -uiPort=4000
 ```
 
 - **name** is the name of the node your want to run
 - **addr** is the IPv4 address on which your node will listen for other nodes
 - **peers** is a list of already runing nodes which will help to enter the network
+- **uiPort** is the port on which you can point your browser to access the UI
 
 ## Features
 
@@ -43,8 +39,8 @@ What is working:
  - Integrity (signing, verifying, creating and storing keys)
  - Search
  - Download
- - Upadte
+ - Update
+ - Web server
  
 What still needs working on:
  - Communication between peers
- - Dynamically serving websites' folders

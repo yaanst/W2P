@@ -3,6 +3,8 @@ package ui
 import (
 	"fmt"
 	"strings"
+    "runtime"
+    "os/exec"
 	"net/http"
 	"encoding/json"
 
@@ -73,6 +75,23 @@ func ServeWebsites() http.Handler {
     return http.StripPrefix("/w/", http.FileServer(http.Dir(utils.WebsiteDir)))
 }
 
+// OpenBrowser starts the user's browser on the UI's URL
+func OpenBrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+        case "linux":
+            err = exec.Command("xdg-open", url).Start()
+        case "windows":
+            err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+        case "darwin":
+            err = exec.Command("open", url).Start()
+        default:
+            err = fmt.Errorf("Cannot open browser, unsupported platform")
+	}
+    utils.CheckError(err)
+}
+
 // StartServer starts listening and serving on addr
 func StartServer(uiPort string, node *node.Node) {
     http.Handle("/", ServeUI())
@@ -82,5 +101,6 @@ func StartServer(uiPort string, node *node.Node) {
     http.HandleFunc("/share", ImportWebsite(node))
     http.HandleFunc("/update", UpdateWebsite(node))
 
+    go OpenBrowser("http://127.0.0.1:"+uiPort)
     http.ListenAndServe("127.0.0.1:" + uiPort, nil)
 }

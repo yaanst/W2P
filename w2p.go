@@ -1,31 +1,20 @@
 package main
 
 import (
-	"flag"
 	"log"
-	"net/http"
+	"flag"
 	"time"
 
-	"github.com/husobee/vestigo"
+	"github.com/yaanst/W2P/ui"
 	"github.com/yaanst/W2P/node"
-	"github.com/yaanst/W2P/utils"
 )
 
-func serveWebsite(w http.ResponseWriter, r *http.Request) {
-	name := vestigo.Param(r, "name")
-	path := utils.WebsiteDir + name
-
-	fs := http.FileServer(http.Dir(path))
-	fs.ServeHTTP(w, r)
-}
-
 func main() {
-	//clientPort := flag.String("client-port", "4000", "Port on which you connect the browser")
-	//publicAddr := flag.String("public-addr", "", "Address used to communicate with other peers in the form of IP:PORT")
-	var name, addr, peers string
+	var name, addr, peers, uiPort string
 	flag.StringVar(&name, "name", "test", "Name of the node")
 	flag.StringVar(&addr, "addr", "", "Address of the node format IP:PORT")
 	flag.StringVar(&peers, "peers", "", "Comma-separated list of peers in the form of IP:PORT")
+	flag.StringVar(&uiPort, "uiPort", "", "Port for the browser based UI")
 	flag.Parse()
 
 	log.Println("arg name:", name)
@@ -35,10 +24,9 @@ func main() {
 	node := node.NewNode(name, addr, peers)
 	node.Init()
 
-	go node.AntiEntropy(time.Second)
+	go node.AntiEntropy(5 * time.Second)
 
-	node.Listen()
+	go node.Listen()
 
-	//router := vestigo.NewRouter()
-	//router.Get("/", http.FileServer(http.Dir("ui/website")))
+    ui.StartServer(uiPort, node)
 }

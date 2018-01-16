@@ -1,23 +1,3 @@
-/*********************
-        Variables
-**********************/
-var BASE_URL = "";
-(function compute_base_url() {
-    proto = window.location.protocol;
-    host = window.location.hostname;
-    port = window.location.port;
-    if (proto != "") {
-        BASE_URL += proto + "//";
-    }
-    if (host != "") {
-        BASE_URL += host;
-    }
-    if (port != "") {
-        BASE_URL += ":" + port;
-    }
-    BASE_URL += "/";
-})();
-
 /***********************************
         Retrieve content
 ************************************/
@@ -28,7 +8,6 @@ var BASE_URL = "";
         setTimeout(fetch_website_list, 1000);
     });
 })();
-
 
 /********************
         Buttons
@@ -107,38 +86,40 @@ $(document).on("click", "#filter_clear_button", function() {
     $("#wesbites_list").show();
 });
 
-
-
 /*********************
         Helpers
 **********************/
 // Format and print the JSON string for websites
 function print_websites_list(data, filtered) {
     websites = JSON.parse(data);
+    num_websites = websites.length;
 
-    // sort websites by name
-    var keys =  [];
-    for (var name in websites) keys.push(name);
-    keys = keys.sort(function(a,b) {
-        return a.localeCompare(b)
-    });
-
-    list = ""
     if (num_websites > 0) {
-        for (name in keys) {
-            w = websites[name];
-            list += `<li><a target="_blank" href="${BASE_URL + name}">${name}</a></li><br />`
+        // sort websites by name
+        var sorted =  [];
+        for (var name in websites) sorted.push(websites[name]);
+        console.log(sorted)
+        sorted = sorted.sort(function(a,b) {
+            return (a.Name).localeCompare(b.Name)
+        });
+
+        list = ""
+        for (idx in sorted) {
+            w = sorted[idx];
+            list += `<li><a target="_blank" href="/w/${name}">${name}</a></li>`
             delete w;
         }
+
+        if (filtered == true) {
+            $("#websites_list_filtered").html(list);
+        } else {
+            $("#websites_list").html(list);
+        }
+        delete list;
+        delete sorted;
     }
-    if (filtered == true) {
-        $("#websites_list_filtered").html(list);
-    } else {
-        $("#websites_list").html(list);
-    }
-    delete list;
-    delete keys;
     delete websites;
+    delete num_websites;
 }
 
 // Format and print 

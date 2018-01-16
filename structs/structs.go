@@ -1,22 +1,21 @@
 package structs
 
 import (
-	"archive/tar"
-	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
+	"fmt"
 	"log"
 	"net"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
+	"strings"
+	"io/ioutil"
+	"archive/tar"
+	"encoding/hex"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/json"
+	"path/filepath"
 
-	//"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/w2pcrypto"
 )
@@ -55,7 +54,7 @@ type Website struct {
 // if a Peer is not directly reachable
 type RoutingTable struct {
 	mux sync.Mutex
-	R   map[string]*Peers
+	R   map[string]*Peer
 }
 
 // ----------------
@@ -142,7 +141,7 @@ func LoadWebsite(name string) *Website {
 // NewRoutingTable constructs a RoutingTable object
 func NewRoutingTable() *RoutingTable {
 	return &RoutingTable{
-		R: make(map[string]*Peers),
+		R: make(map[string]*Peer),
 	}
 }
 
@@ -445,4 +444,20 @@ func (w *Website) GenPieces(pieceLength int) {
 	pieces = pieces + hash
 
 	w.Pieces = pieces
+}
+
+// Routing table
+
+// Set adds a new entry or updates an existing one in the routing table
+func (rt *RoutingTable) Set(dst string, via Peer) {
+    rt.mux.Lock()
+    defer rt.mux.Unlock()
+    *rt.R[dst] = via
+}
+
+// Delete removes an element from the routing table
+func (rt *RoutingTable) Delete(dst string) {
+    rt.mux.Lock()
+    defer rt.mux.Unlock()
+    delete(rt.R, dst)
 }

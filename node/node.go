@@ -257,24 +257,20 @@ func (n *Node) Listen() {
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
 			heartbeat.Send(n.Conn, orig) //TODO use routing table
 
-			// WebsiteMapUpdate
+		// WebsiteMapUpdate
 		} else if message.Meta != nil {
 			log.Println("[RECEIVE] WebsiteMap from " + orig.String())
 			go n.CheckPeer(orig)
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
-			// Data
+		// Data
 		} else if message.Data != nil {
 			msgData := message.Data
 
 			// DataRequest
 			if msgData.Data != nil {
 				log.Println("[RECEIVE] DataRequest from " + orig.String())
-				go n.SendPiece(message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
-			} else {
-				//TODO ??? (I think it is not needed because you open temporary
-				//connections to download pices in RetrievePiece()
-
+				go n.SendPiece(message, msgData.Website, msgData.Piece)
 			}
 		}
 	}

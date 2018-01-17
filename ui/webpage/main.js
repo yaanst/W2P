@@ -40,7 +40,7 @@ $(document).on("click", "#websites_extra_button", function() {
     if (EXTRA_WINDOW == "share") {
         $.post("/share", 
             {
-                name: $("#share_folders_select").val(),
+                name: $("#extra_folders_select").val(),
                 keywords: $("#keywords_input").val()
             },
             function (data, status) {}
@@ -49,7 +49,7 @@ $(document).on("click", "#websites_extra_button", function() {
     } else if (EXTRA_WINDOW == "update") {
         $.post("/update", 
             {
-                name: $("#share_folders_select").val(),
+                name: $("#extra_folders_select").val(),
                 keywords: $("#keywords_input").val()
             },
             function (data, status) {}
@@ -63,7 +63,6 @@ $(document).on("click", "#websites_extra_button", function() {
 // Filter the website list based on keywords entered in the input field
 $(document).on("click", "#filter_apply_button", function() {
     k = $("#filter_keywords").val();
-    console.log(k);
     $.post("/filter", 
         {
             keywords: k
@@ -79,7 +78,6 @@ $(document).on("click", "#filter_apply_button", function() {
 
 // Clears the filters applied on the website list
 $(document).on("click", "#filter_clear_button", function() {
-    console.log("clear");
     $("#current_filter").html("");
     $("#filter_keywords").val("");
     $("websites_list_filtered").hide();
@@ -92,13 +90,13 @@ $(document).on("click", "#filter_clear_button", function() {
 // Format and print the JSON string for websites
 function print_websites_list(data, filtered) {
     websites = JSON.parse(data);
-    num_websites = websites.length;
+    websites = websites.W
+    num_websites = Object.keys(websites).length;
 
     if (num_websites > 0) {
         // sort websites by name
         var sorted =  [];
         for (var name in websites) sorted.push(websites[name]);
-        console.log(sorted)
         sorted = sorted.sort(function(a,b) {
             return (a.Name).localeCompare(b.Name)
         });
@@ -106,7 +104,7 @@ function print_websites_list(data, filtered) {
         list = ""
         for (idx in sorted) {
             w = sorted[idx];
-            list += `<li><a target="_blank" href="/w/${name}">${name}</a></li>`
+            list += `<li><a target="_blank" href="/w/${w.Name}">${w.Name}</a></li>`
             delete w;
         }
 
@@ -126,14 +124,14 @@ function print_websites_list(data, filtered) {
 function print_website_folder(data) {
     websites = JSON.parse(data);
     websites = websites.sort();
-    
-    options = $("#folders_select").innerHTML
+
+    options = $("#extra_folder_select").innerHTML
     for (idx in websites) {
         w = websites[idx]
         options += `<option value="${w}">${w}</option>`
         delete w;
     }
-    $("#folders_select"),html(options);
+    $("#extra_folders_select").html(options);
     delete websites;
     delete options;
 }

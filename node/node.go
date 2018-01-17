@@ -1,7 +1,7 @@
 package node
 
 import (
-	"crypto/sha256"
+    "crypto/sha256"
 	"encoding/hex"
 	"io/ioutil"
 	"log"
@@ -64,32 +64,25 @@ func NewNode(name, addrString, peersString string) *Node {
 // Init initialize a Node adding website already present on disk and checking
 // wether we have their metadata, also checking every dir is present
 func (n *Node) Init() {
+    var dirPerm os.FileMode = 0755
 	if _, err := os.Stat(utils.MetadataDir); err != nil {
-		err := os.MkdirAll(utils.MetadataDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.MetadataDir, dirPerm)
+	    utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.SeedDir); err != nil {
-		err := os.MkdirAll(utils.SeedDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.SeedDir, dirPerm)
+	    utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.WebsiteDir); err != nil {
-		err := os.MkdirAll(utils.WebsiteDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.WebsiteDir, dirPerm)
+	    utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.KeyDir); err != nil {
-		err := os.MkdirAll(utils.KeyDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.KeyDir, dirPerm)
+	    utils.CheckError(err)
 	}
 
 	websitesNames := utils.ScanDir(utils.WebsiteDir)
@@ -161,6 +154,7 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	defer conn.Close()
 	utils.CheckError(err)
 
+    // Set Read timeout
 	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
 	message := comm.NewHeartbeat(tempPeer, peer)
@@ -247,15 +241,18 @@ func (n *Node) Listen() {
 
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
-			//TODO routing table
-			continue
+            //TODO: sent with routing table (by default populate with A->A ?
+            via := n.RoutingTable.Get(dest.String())
+            message.Send(n.Conn, via)
 		}
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
+            //TODO; heartbeat answered using RoutingTable
 			log.Println("[RECEIVE] Heartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			heartbeat.Send(n.Conn, orig) //TODO use routing table
+            via := n.RoutingTable.Get(orig.String())
+			heartbeat.Send(n.Conn, via)
 
 		// WebsiteMapUpdate
 		} else if message.Meta != nil {
@@ -397,9 +394,7 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	pieces := website.Pieces
 	numPieces := len(pieces) / 8

@@ -1,19 +1,19 @@
 package structs
 
 import (
-	"io"
-	"os"
-	"fmt"
-	"net"
-	"sync"
-	"strings"
-	"io/ioutil"
 	"archive/tar"
-	"encoding/hex"
 	"compress/gzip"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/yaanst/W2P/utils"
 	"github.com/yaanst/W2P/w2pcrypto"

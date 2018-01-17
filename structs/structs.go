@@ -4,7 +4,6 @@ import (
 	"io"
 	"os"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"strings"
@@ -64,13 +63,9 @@ type RoutingTable struct {
 // ParsePeer construct a Peer from a string of format "addr:port"
 func ParsePeer(peerString string) *Peer {
 	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
-
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	peer := Peer(*udpAddr)
-
 	return &peer
 }
 
@@ -79,7 +74,6 @@ func ParsePeer(peerString string) *Peer {
 func ParsePeers(peersString string) *Peers {
 	if peersString != "" {
 		addrList := strings.Split(peersString, ",")
-
 		peers := NewPeers()
 
 		for _, addr := range addrList {
@@ -125,15 +119,11 @@ func NewWebsite(name string, keywords []string) *Website {
 // LoadWebsite constructs a Website from a metadata file
 func LoadWebsite(name string) *Website {
 	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	var website *Website
 	err = json.Unmarshal(jsonData, website)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	return website
 }
@@ -298,23 +288,17 @@ func (w *Website) IncVersion() {
 // SaveMetadata write/overwrite a metadata file in the website folder
 func (w *Website) SaveMetadata() {
 	jsonData, err := json.Marshal(w)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	err = ioutil.WriteFile(utils.MetadataDir+w.Name, jsonData, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 }
 
 // Bundle creates a compressed archive of a website folder for seeding
 func (w *Website) Bundle() {
 	file, err := os.Create(utils.SeedDir + w.Name)
 	defer file.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	gzw := gzip.NewWriter(file)
 	defer gzw.Close()
@@ -333,7 +317,6 @@ func (w *Website) Bundle() {
 		}
 
 		header.Name = path
-
 		err = tw.WriteHeader(header)
 		if err != nil {
 			return err
@@ -357,37 +340,27 @@ func (w *Website) Bundle() {
 
 		return nil
 	})
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 }
 
 // Unbundle uncompress and unarchive a website to display it
 func (w *Website) Unbundle() {
 	archive, err := os.Open(utils.SeedDir + w.Name)
 	defer archive.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	gzr, err := gzip.NewReader(archive)
 	defer gzr.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	tr := tar.NewReader(gzr)
 
 	for {
 		header, err := tr.Next()
-
 		if err == io.EOF {
 			break
 		}
-
-		if err != nil {
-			log.Fatal(err)
-		}
+        utils.CheckError(err)
 
 		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
 
@@ -396,22 +369,16 @@ func (w *Website) Unbundle() {
 			_, err := os.Stat(target)
 			if err != nil {
 				err = os.MkdirAll(target, 0755)
-				if err != nil {
-					log.Fatal(err)
-				}
+                utils.CheckError(err)
 			}
 
 		case tar.TypeReg:
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			defer f.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
+            utils.CheckError(err)
 
 			_, err = io.Copy(f, tr)
-			if err != nil {
-				log.Fatal(err)
-			}
+            utils.CheckError(err)
 		}
 	}
 }
@@ -422,9 +389,7 @@ func (w *Website) GenPieces(pieceLength int) {
 	w.PieceLength = pieceLength
 
 	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	rest := data
 	var chunk []byte
@@ -448,11 +413,18 @@ func (w *Website) GenPieces(pieceLength int) {
 
 // Routing table
 
-// Set adds a new entry or updates an existing one in the routing table
-func (rt *RoutingTable) Set(dst string, via Peer) {
+// Get returns the value associated to dst or nil
+func (rt *RoutingTable) Get(dst string) *Peer {
     rt.mux.Lock()
     defer rt.mux.Unlock()
-    *rt.R[dst] = via
+    return rt.R[dst]
+}
+
+// Set adds a new entry or updates an existing one in the routing table
+func (rt *RoutingTable) Set(dst string, via *Peer) {
+    rt.mux.Lock()
+    defer rt.mux.Unlock()
+    rt.R[dst] = via
 }
 
 // Delete removes an element from the routing table

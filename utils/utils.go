@@ -10,7 +10,10 @@ import (
 // - Const -
 // ---------
 
-// WebsiteDir is the path to the directory containing all website
+// UIDir is the path to the directory containing the UI
+const UIDir string = "./ui/webpage"
+
+// WebsiteDir is the path to the directory containing all websites
 const WebsiteDir string = "./website/"
 
 // MetadataDir is the directory in which we save all serialization of websites

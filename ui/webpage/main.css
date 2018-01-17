@@ -82,9 +82,20 @@ p {
 .scroll-auto {
     overflow: auto;
 }
-.ul-no-decoration {
-    text-decoration: none;
+.ul-no-deco {
+    list-style-type: none;
+    margin: 10px;
+    padding: 0;
+    text-align: left;
 }
+.ul-no-deco li {
+    line-height: 0.5;
+}
+.ul-no-deco a {
+   text-decoration: none;
+   font-size: 1.3em;   
+}
+
 .hidden {
     display: none;
 }

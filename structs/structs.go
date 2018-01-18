@@ -413,11 +413,15 @@ func (w *Website) GenPieces(pieceLength int) {
 
 // Routing table
 
-// Get returns the value associated to dst or nil
+// Get returns the value peer through which to send the packet or dst
 func (rt *RoutingTable) Get(dst string) *Peer {
     rt.mux.Lock()
     defer rt.mux.Unlock()
-    return rt.R[dst]
+    via := rt.R[dst]
+    if via == nil {
+        via = ParsePeer(dst)
+    }
+    return via
 }
 
 // Set adds a new entry or updates an existing one in the routing table

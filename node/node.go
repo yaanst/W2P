@@ -205,34 +205,29 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		rWeb := remoteWM.Get(rKey)
 
 		if lWeb != nil {
+            log.Print("[WEBSITEMAP] Updating website", lWeb.Name)
 			if rWeb.Version > lWeb.Version {
-				// Update version
-				for lWeb.Version < rWeb.Version {
-					lWeb.IncVersion()
-				}
-				// Update keywords
+                lWeb.Version = rWeb.Version
 				lWeb.SetKeywords(rWeb.GetKeywords())
-
-				// Update Pieces
 				lWeb.Pieces = rWeb.Pieces
 
-				// Update seeders
-				// For all remoteWebsite seeders
+				// Add missing seeders for lWeb
 				for _, rPeer := range rWeb.GetSeeders() {
-					// If not already present -> add them to website directly
 					if !lWeb.Seeders.Contains(&rPeer) {
 						lWeb.Seeders.Add(&rPeer)
 					}
 				}
-				// For all localWebsite seeders
+                // Remove extra seeders for lWeb
 				for _, lPeer := range lWeb.GetSeeders() {
-					// If not present -> remove them from  website
 					if !rWeb.Seeders.Contains(&lPeer) {
 						lWeb.Seeders.Remove(&lPeer)
 					}
 				}
 			}
-		}
+		} else {
+            log.Print("[WEBSITEMAP] Adding website", rWeb)
+            localWM.Set(rWeb)
+        }
 	}
 }
 

@@ -212,7 +212,7 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		rWeb := remoteWM.Get(rKey)
 
         if lWeb.PubKey.String() != rWeb.PubKey.String() {
-            log.Fatalf("Public keys not matching for local/remote website %v\n", lWeb.Name)
+            log.Fatalf("[WEBSITEMAP] Public keys not matching for local/remote website %v\n", lWeb.Name)
         }
 
 

@@ -114,27 +114,33 @@ func (n *Node) AddWebsite(name string) {
 func (n *Node) AddNewWebsite(name string, keywords []string) {
 	website := structs.NewWebsite(name, keywords)
 
-	website.Bundle()
+    if website != nil && website.IsOurs() {
+        website.Sign()
+        website.Bundle()
 
-	website.GenPieces(utils.DefaultPieceLength)
-	website.Seeders.Add(n.Addr)
-	website.SaveMetadata()
+        website.GenPieces(utils.DefaultPieceLength)
+        website.Seeders.Add(n.Addr)
+        website.SaveMetadata()
 
-	n.WebsiteMap.Set(website)
+        n.WebsiteMap.Set(website)
+    }
 }
 
 // UpdateWebsite update a Website in the WebsiteMap when user modified
 // his website
-func (n *Node) UpdateWebsite(name string, keywords []string) {
-	website := n.WebsiteMap.Get(name)
+func (n *Node) UpdateWebsite(name string, keywords []string) bool {
+    website := n.WebsiteMap.Get(name)
 
-	website.Bundle()
+    if website != nil && website.IsOurs() {
+        website.Bundle()
 
-	website.SetKeywords(keywords)
-	website.GenPieces(utils.DefaultPieceLength)
-	website.IncVersion()
-	website.SaveMetadata()
-
+        website.SetKeywords(keywords)
+        website.GenPieces(utils.DefaultPieceLength)
+        website.IncVersion()
+        website.SaveMetadata()
+        return true
+    }
+    return false
 }
 
 // SendWebsiteMap shares the node's WebsiteMap with other nodes
@@ -203,6 +209,11 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 	for _, rKey := range rIndices {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
+
+        if lWeb.PubKey.String() != rWeb.PubKey.String() {
+            log.Fatalf("Public keys not matching for local/remote website %v\n", lWeb.Name)
+        }
+
 
 		if lWeb != nil {
             log.Print("[WEBSITEMAP] Updating website", lWeb.Name)

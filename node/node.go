@@ -28,6 +28,7 @@ type Node struct {
 	Addr         *structs.Peer
 	Conn         *net.UDPConn
 	Peers        *structs.Peers
+    HBCounter    *structs.Counter
 	RoutingTable *structs.RoutingTable
 	WebsiteMap   *structs.WebsiteMap
 }
@@ -42,6 +43,7 @@ func NewNode(name, addrString, peersString string) *Node {
 	peers := structs.ParsePeers(peersString)
 	rt := structs.NewRoutingTable()
 	wm := structs.NewWebsiteMap()
+    hbCounter := structs.NewCounter()
 
 	connAddr := net.UDPAddr(*addr)
 	conn, err := net.ListenUDP("udp4", &connAddr)
@@ -52,6 +54,7 @@ func NewNode(name, addrString, peersString string) *Node {
 		Addr:         addr,
 		Conn:         conn,
 		Peers:        peers,
+        HBCounter:    hbCounter,
 		RoutingTable: rt,
 		WebsiteMap:   wm,
 	}
@@ -181,6 +184,12 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 
 // CheckPeer checks if peer is up and removes it from every location if not
 func (n *Node) CheckPeer(peer *structs.Peer) {
+    for n.HBCounter.Read() >= utils.HeartBeatLimit {
+        time.Sleep(50 * time.Millisecond)
+    }
+    n.HBCounter.Inc()
+    defer n.HBCounter.Dec()
+
 	c := make(chan bool)
 	go n.HeartBeat(peer, c)
 
@@ -427,6 +436,8 @@ func (n *Node) AntiEntropy(timeout time.Duration) {
 	ticker := time.NewTicker(timeout)
 
 	for range ticker.C {
-		n.SendWebsiteMap()
+        if n.Peers.Count() > 0 {
+		    n.SendWebsiteMap()
+        }
 	}
 }

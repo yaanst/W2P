@@ -132,6 +132,7 @@ func (n *Node) UpdateWebsite(name string, keywords []string) bool {
     website := n.WebsiteMap.Get(name)
 
     if website != nil && website.IsOurs() {
+        website.Sign()
         website.Bundle()
 
         website.SetKeywords(keywords)

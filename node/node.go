@@ -147,6 +147,7 @@ func (n *Node) SendWebsiteMap() {
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
 		message.Send(n.Conn, &p)
 		log.Println("[SENT] WebsiteMap to", p.String())
+        n.CheckPeer(&p)
 	}
 }
 

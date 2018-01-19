@@ -53,7 +53,6 @@ $(document).on("click", "#websites_extra_button", function() {
                 keywords: $("#keywords_input").val()
             },
             function (data, status) {
-                console.log(data);
                 if (data == "false") {
                     alert("Website could not be updated.\nYou can update only websites already existing and that you own");
                 }
@@ -67,15 +66,12 @@ $(document).on("click", "#websites_extra_button", function() {
 
 // Filter the website list based on keywords entered in the input field
 $(document).on("click", "#filter_apply_button", function() {
-    console.log("CLICKED");
     k = $("#filter_keywords").val();
-    console.log(k);
     $.post("/filter", 
         {
             keywords: k
         },
         function (data, status) {
-            console.log("data", data);
             print_websites_filtered(data);
         }
     );

@@ -65,11 +65,7 @@ type RoutingTable struct {
 // ParsePeer construct a Peer from a string of format "addr:port"
 func ParsePeer(peerString string) *Peer {
 	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
+    utils.CheckError(err)
 	peer := Peer(*udpAddr)
 
 	return &peer
@@ -126,15 +122,11 @@ func NewWebsite(name string, keywords []string) *Website {
 // LoadWebsite constructs a Website from a metadata file
 func LoadWebsite(name string) *Website {
 	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	var website *Website
 	err = json.Unmarshal(jsonData, website)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	return website
 }
@@ -299,14 +291,10 @@ func (w *Website) IncVersion() {
 // SaveMetadata write/overwrite a metadata file in the website folder
 func (w *Website) SaveMetadata() {
 	jsonData, err := json.Marshal(w)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	err = ioutil.WriteFile(utils.MetadataDir+w.Name, jsonData, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 }
 
 // IsOurs checks if the private key for this website is present which means this
@@ -326,7 +314,7 @@ func (w *Website) Sign() {
         if err != nil {
             return err
         }
-        if info.Mode().IsRegular() {
+        if info.Mode().IsRegular() && info.Name() != "contents.json" {
             data, err := ioutil.ReadFile(path)
             if err != nil {
                 return err
@@ -367,7 +355,7 @@ func (w *Website) Verify() bool {
         if err != nil {
             return err
         }
-        if info.Mode().IsRegular() {
+        if info.Mode().IsRegular() && info.Name() != "contents.json" {
             data, err := ioutil.ReadFile(path)
             if err != nil {
                 return err
@@ -447,15 +435,11 @@ func (w *Website) Bundle() {
 func (w *Website) Unbundle() {
 	archive, err := os.Open(utils.SeedDir + w.Name)
 	defer archive.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	gzr, err := gzip.NewReader(archive)
 	defer gzr.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	tr := tar.NewReader(gzr)
 
@@ -466,9 +450,7 @@ func (w *Website) Unbundle() {
 			break
 		}
 
-		if err != nil {
-			log.Fatal(err)
-		}
+        utils.CheckError(err)
 
 		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
 
@@ -477,24 +459,21 @@ func (w *Website) Unbundle() {
 			_, err := os.Stat(target)
 			if err != nil {
 				err = os.MkdirAll(target, 0755)
-				if err != nil {
-					log.Fatal(err)
-				}
+                utils.CheckError(err)
 			}
 
 		case tar.TypeReg:
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			defer f.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
+            utils.CheckError(err)
 
 			_, err = io.Copy(f, tr)
-			if err != nil {
-				log.Fatal(err)
-			}
+            utils.CheckError(err)
 		}
 	}
+    if !w.Verify() {
+        log.Fatalf("[UNBUNDLE] Signatue for %v does not match\n", w.Name)
+    }
 }
 
 // GenPieces generates the pieces from the website archive and set it in
@@ -503,9 +482,7 @@ func (w *Website) GenPieces(pieceLength int) {
 	w.PieceLength = pieceLength
 
 	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
-	if err != nil {
-		log.Fatal(err)
-	}
+    utils.CheckError(err)
 
 	rest := data
 	var chunk []byte

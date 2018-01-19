@@ -132,10 +132,10 @@ func (n *Node) UpdateWebsite(name string, keywords []string) {
 
 // SendWebsiteMap shares the node's WebsiteMap with other nodes
 func (n *Node) SendWebsiteMap() {
-	//TODO: Send to ALL or subset or random but more frequently?
 	for _, p := range n.Peers.GetAll() {
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
-		message.Send(n.Conn, &p)
+        via := n.RoutingTable.Get(p.String())
+		message.Send(n.Conn, via)
 		log.Println("[SENT] WebsiteMap to", p.String())
 	}
 }
@@ -160,7 +160,8 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	message := comm.NewHeartbeat(tempPeer, peer)
 	buffer := make([]byte, utils.HeartBeatBufferSize)
 
-	message.Send(conn, peer)
+    via := n.RoutingTable.Get(peer.String())
+	message.Send(conn, via)
 
 	log.Println("[SENT] Heartbeat to", peer.String())
 
@@ -186,6 +187,7 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 	} else {
 		log.Println("[HEARTBEAT] Peer", peer, "is up")
 		n.Peers.Add(peer)
+        n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
 }
 
@@ -364,7 +366,8 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 
 		message := comm.NewDataRequest(tempPeer, &seeder, website.Name, piece)
 
-		message.Send(conn, &seeder)
+        via := n.RoutingTable.Get(seeder.String())
+		message.Send(conn, via)
 
 		// Maybe make a const for buffer size
 		buf := make([]byte, 65507)

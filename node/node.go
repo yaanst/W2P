@@ -234,7 +234,8 @@ func (n *Node) Listen() {
 	log.Println("[LISTENING] on", n.Addr.String())
 
 	for {
-		_, _, err := n.Conn.ReadFromUDP(buffer)
+		_, senderAddr, err := n.Conn.ReadFromUDP(buffer)
+        sender := structs.ParsePeer(senderAddr.String())
 		utils.CheckError(err)
 
 		message := comm.DecodeMessage(buffer)
@@ -243,14 +244,20 @@ func (n *Node) Listen() {
 
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
-            //TODO: sent with routing table (by default populate with A->A ?
             via := n.RoutingTable.Get(dest.String())
             message.Send(n.Conn, via)
 		}
 
+        // Update RoutingTable
+        if !structs.PeerEquals(orig, sender) {
+            n.RoutingTable.Set(orig.String(), sender)
+        } else {
+            n.RoutingTable.Set(orig.String(), orig)
+        }
+
+
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
-            //TODO; heartbeat answered using RoutingTable
 			log.Println("[RECEIVE] Heartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
             via := n.RoutingTable.Get(orig.String())

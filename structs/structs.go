@@ -484,5 +484,9 @@ func (c *Counter) Inc() {
 func (c *Counter) Dec() {
     c.mux.Lock()
     defer c.mux.Unlock()
-    c.C--
+    if (c.C - 1) < 0 {
+        c.C = 0
+    } else {
+        c.C--
+    }
 }

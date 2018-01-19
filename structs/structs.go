@@ -430,10 +430,3 @@ func (rt *RoutingTable) Set(dst string, via *Peer) {
     defer rt.mux.Unlock()
     rt.R[dst] = via
 }
-
-// Delete removes an element from the routing table
-func (rt *RoutingTable) Delete(dst string) {
-    rt.mux.Lock()
-    defer rt.mux.Unlock()
-    delete(rt.R, dst)
-}

@@ -114,7 +114,7 @@ func (n *Node) AddWebsite(name string) {
 func (n *Node) AddNewWebsite(name string, keywords []string) {
 	website := structs.NewWebsite(name, keywords)
 
-    if website != nil && website.IsOurs() {
+    if website != nil && website.Owned() {
         website.Sign()
         website.Bundle()
 
@@ -131,7 +131,7 @@ func (n *Node) AddNewWebsite(name string, keywords []string) {
 func (n *Node) UpdateWebsite(name string, keywords []string) bool {
     website := n.WebsiteMap.Get(name)
 
-    if website != nil && website.IsOurs() {
+    if website != nil && website.Owned() {
         website.Sign()
         website.Bundle()
 

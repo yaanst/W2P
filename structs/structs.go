@@ -297,9 +297,9 @@ func (w *Website) SaveMetadata() {
     utils.CheckError(err)
 }
 
-// IsOurs checks if the private key for this website is present which means this
+// Owned checks if the private key for this website is present which means this
 // node owns the website
-func (w *Website) IsOurs() bool {
+func (w *Website) Owned() bool {
     _, err := os.Stat(utils.KeyDir + w.Name)
     return (err == nil)
 }

@@ -151,13 +151,10 @@ func (key *PrivateKey) Save(fileName string) {
 	)
 }
 
-// SignMessage takes in a *PrivateKey pointer and a message as a string.
-// It computes the SHA256 hash of the message and signs it.
-// It returns the signature as a string if no error is encountered
-func (key *PrivateKey) SignMessage(msg string) string {
+// SignMessage signs a given message with the private key
+func (key *PrivateKey) SignMessage(msg []byte) string {
 	rng := rand.Reader
-	message := []byte(msg)
-	hashed := sha256.Sum256(message)
+	hashed := sha256.Sum256(msg)
 
 	signature, err := rsa.SignPKCS1v15(rng, key.PrivateKey, crypto.SHA256, hashed[:])
 	CheckError(err)
@@ -198,12 +195,9 @@ func (key *PublicKey) Save(fileName string) {
 	)
 }
 
-// VerifySignature takes in a *rsa.PrivateKey, a message and a signature.
-// It verifies if the signature is valid using the function rsa.VerifyPKCS1v15
-// It returns a boolean if a signature is valid or not
-func (key *PublicKey) VerifySignature(pubkey *rsa.PublicKey, msg string, signature_str string) bool {
-	message := []byte(msg)
-	hashed := sha256.Sum256(message)
+// VerifySignature verifies a signature with the given message and public key
+func (key *PublicKey) VerifySignature(msg []byte, signature_str string) bool {
+	hashed := sha256.Sum256(msg)
 	signature, _ := hex.DecodeString(signature_str)
 	err := rsa.VerifyPKCS1v15(key.PublicKey, crypto.SHA256, hashed[:], signature)
 	return (err == nil)

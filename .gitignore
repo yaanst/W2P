@@ -7,6 +7,9 @@ keys/
 seed/
 metadata/
 
+# tmp dir for tests purpose
+tmp/
+
 # Created by https://www.gitignore.io/api/go,vim
 keys
 

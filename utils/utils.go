@@ -1,9 +1,9 @@
 package utils
 
 import (
+	"io/ioutil"
 	"log"
 	"time"
-	"io/ioutil"
 )
 
 // ---------
@@ -40,6 +40,9 @@ const HeartBeatLimit int = 50
 
 // HeartBeatTimeout is the default timeout for an answer from a peer
 const HeartBeatTimeout time.Duration = time.Duration(5000000000) // 5s
+
+// HashSize is the number of hex character in a sha256 hash (for pieces)
+const HashSize int = 64
 
 // -----------
 // - Helpers -

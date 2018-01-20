@@ -167,7 +167,7 @@ func (n *Node) SendWebsiteMap() {
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
 		via := n.RoutingTable.Get(p.String())
 		message.Send(n.Conn, via)
-		log.Println("[SENT] WebsiteMap to", p.String())
+		log.Println("[SENT]\tWebsiteMap to", p.String())
 		n.CheckPeer(&p)
 	}
 }
@@ -183,8 +183,8 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	lAddr := net.UDPAddr(*tempPeer)
 
 	conn, err := net.ListenUDP("udp4", &lAddr)
-	defer conn.Close()
 	utils.CheckError(err)
+	defer conn.Close()
 
 	// Set Read timeout
 	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
@@ -238,33 +238,31 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
 
-		if lWeb.PubKey.String() != rWeb.PubKey.String() {
-			log.Fatalf("[WEBSITEMAP] Public keys not matching for local/remote website %v\n", lWeb.Name)
-		}
+		if lWeb == nil {
+			log.Print("[WEBSITEMAP]\tAdding website '" + rWeb.Name + "'")
+			localWM.Set(rWeb)
+			n.RetrieveWebsite(rWeb.Name)
+		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
+			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
+		} else if rWeb.Version > lWeb.Version {
+			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
+			lWeb.Version = rWeb.Version
+			lWeb.SetKeywords(rWeb.GetKeywords())
+			lWeb.Pieces = rWeb.Pieces
 
-		if lWeb != nil {
-			log.Print("[WEBSITEMAP] Updating website", lWeb.Name)
-			if rWeb.Version > lWeb.Version {
-				lWeb.Version = rWeb.Version
-				lWeb.SetKeywords(rWeb.GetKeywords())
-				lWeb.Pieces = rWeb.Pieces
-
-				// Add missing seeders for lWeb
-				for _, rPeer := range rWeb.GetSeeders() {
-					if !lWeb.Seeders.Contains(&rPeer) {
-						lWeb.Seeders.Add(&rPeer)
-					}
-				}
-				// Remove extra seeders for lWeb
-				for _, lPeer := range lWeb.GetSeeders() {
-					if !rWeb.Seeders.Contains(&lPeer) {
-						lWeb.Seeders.Remove(&lPeer)
-					}
+			// Add missing seeders for lWeb
+			for _, rPeer := range rWeb.GetSeeders() {
+				if !lWeb.Seeders.Contains(&rPeer) {
+					lWeb.Seeders.Add(&rPeer)
 				}
 			}
-		} else {
-			log.Print("[WEBSITEMAP] Adding website", rWeb)
-			localWM.Set(rWeb)
+			// Remove extra seeders for lWeb
+			for _, lPeer := range lWeb.GetSeeders() {
+				if !rWeb.Seeders.Contains(&lPeer) {
+					lWeb.Seeders.Remove(&lPeer)
+				}
+			}
+			n.RetrieveWebsite(rWeb.Name)
 		}
 	}
 }
@@ -315,8 +313,9 @@ func (n *Node) Listen() {
 			msgData := message.Data
 
 			// DataRequest
-			if msgData.Data != nil {
-				log.Println("[RECEIVE] DataRequest from " + orig.String())
+			if msgData.Data == nil {
+				log.Println("[RECEIVE]\tDataRequest: '" + msgData.Piece + "' for '" +
+					msgData.Website + "' from " + orig.String())
 				go n.SendPiece(message, msgData.Website, msgData.Piece)
 			}
 		}
@@ -341,16 +340,16 @@ func (n *Node) Search(search string) []string {
 }
 
 // RetrieveWebsite retrieve the archive of a website in order to display it itself
-func (n *Node) RetrieveWebsite(name string, ch chan int) {
+func (n *Node) RetrieveWebsite(name string) {
 	log.Println("[PIECES]\tRetrieving pieces for website '" + name + "'")
 	website := n.WebsiteMap.Get(name)
 
 	pieces := website.Pieces
-	numPieces := len(pieces) / 8
+	numPieces := len(pieces) / utils.HashSize
 	chans := make([]chan []byte, numPieces)
 
-	for i := 0; i <= numPieces; i++ {
-		piece := pieces[:i*8]
+	for i := 0; i < numPieces; i++ {
+		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
 		chans[i] = make(chan []byte, 1)
 		go n.RetrievePiece(website, piece, chans[i])
 	}
@@ -379,7 +378,7 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 		okPiece += <-ok
 	}
 
-	log.Println("[PIECES]\tSuccessful retrieval for website '" + name + "'")
+	log.Println("[PIECES]\tSuccessful retrieval of website '" + name + "'")
 
 	// archive is now complete we can unbundle it and seed it
 	// TODO need to checksum this !
@@ -388,14 +387,17 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 
 	log.Println("[WEBSITES]\tUnbundling website '" + name + "'")
 	website.Unbundle()
+
+	log.Println("[WEBSITES]\tSaving metadata for '" + name + "'")
+	website.SaveMetadata()
 }
 
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	for _, seeder := range website.GetSeeders() {
-		log.Println("[PIECES]\tRetrieving piece " + piece + " for website '" +
-			website.Name + "' by '" + seeder.String() + "'")
-		rAddr := net.UDPAddr(seeder)
+		log.Println("[PIECES]\tRetrieving piece '" + piece + "' for website '" +
+			website.Name + "' by " + seeder.String())
+
 		// Create a random local address for a new connection
 		tempPeer := &structs.Peer{
 			IP:   n.Addr.IP,
@@ -404,17 +406,17 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		}
 		lAddr := net.UDPAddr(*tempPeer)
 
-		// try 2 deifferent ports
-		conn, err := net.DialUDP("udp4", &lAddr, &rAddr)
-		defer conn.Close()
+		// try 2 different ports
+		conn, err := net.ListenUDP("udp4", &lAddr)
 		if err != nil {
 			tempPeer.Port++
 			lAddr := net.UDPAddr(*tempPeer)
-			conn, err = net.DialUDP("udp4", &lAddr, &rAddr)
+			conn, err = net.ListenUDP("udp4", &lAddr)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
+		defer conn.Close()
 
 		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
@@ -422,6 +424,9 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 
 		via := n.RoutingTable.Get(seeder.String())
 		message.Send(conn, via)
+
+		log.Println("[SENT]\t\tDatarequest: '" + piece + "' for website '" +
+			website.Name + "' to " + seeder.String())
 
 		// Maybe make a const for buffer size
 		buf := make([]byte, 65507)
@@ -437,11 +442,11 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 			hash := hex.EncodeToString(sum[:])
 
 			if hash != piece {
-				log.Println("[PIECES]\tBad piece " + piece + " for website '" +
-					website.Name + "' by '" + seeder.String() + "'")
+				log.Println("[PIECES]\tBad piece '" + piece + "' for website '" +
+					website.Name + "' by " + seeder.String())
 			} else {
-				log.Println("[PIECES]\tGood piece " + piece + " for website '" +
-					website.Name + "' by '" + seeder.String() + "'")
+				log.Println("[PIECES]\tGood piece '" + piece + "' for website '" +
+					website.Name + "' by " + seeder.String())
 				c <- data
 				return
 			}
@@ -456,20 +461,26 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
 	utils.CheckError(err)
 
+	archiveSize := len(archiveData)
 	pieces := website.Pieces
-	numPieces := len(pieces) / 8
+	numPieces := len(pieces) / utils.HashSize
 
 	var data []byte
-	for i := 0; i <= numPieces; i++ {
-		piece := pieces[:i*8]
+	for i := 0; i < numPieces; i++ {
+		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
 		if piece == pieceToSend {
-			offset := i * website.PieceLength
-			data = archiveData[offset : offset+website.PieceLength]
+			offsetStart := i * website.PieceLength
+			offsetEnd := (i + 1) * website.PieceLength
+			if offsetEnd >= archiveSize {
+				offsetEnd = archiveSize
+			}
+
+			data = archiveData[offsetStart:offsetEnd]
 			// need to check for checksum here
 			reply := comm.NewDataReply(request, data)
 			reply.Send(n.Conn, reply.Dest)
-			log.Println("[PIECES]\tSent piece " + piece + " for website '" +
-				website.Name + "' to '" + reply.Dest.String() + "'")
+			log.Println("[SENT]\tPiece '" + piece + "' for website '" +
+				website.Name + "' to " + reply.Dest.String())
 			return
 		}
 	}

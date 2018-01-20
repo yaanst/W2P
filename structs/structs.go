@@ -6,10 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-    "errors"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -57,9 +58,10 @@ type RoutingTable struct {
 	R   map[string]*Peer
 }
 
+// Counter is a simple async counter
 type Counter struct {
-    mux sync.RWMutex
-    C   int
+	mux sync.RWMutex
+	C   int
 }
 
 // ----------------
@@ -69,7 +71,7 @@ type Counter struct {
 // ParsePeer construct a Peer from a string of format "addr:port"
 func ParsePeer(peerString string) *Peer {
 	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
-  utils.CheckError(err)
+	utils.CheckError(err)
 	peer := Peer(*udpAddr)
 	return &peer
 }
@@ -124,11 +126,13 @@ func NewWebsite(name string, keywords []string) *Website {
 // LoadWebsite constructs a Website from a metadata file
 func LoadWebsite(name string) *Website {
 	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
-    utils.CheckError(err)
+	utils.CheckError(err)
 
-	var website *Website
+	log.Println(jsonData)
+
+	website := &Website{}
 	err = json.Unmarshal(jsonData, website)
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	return website
 }
@@ -142,9 +146,9 @@ func NewRoutingTable() *RoutingTable {
 
 // NewCounter constructs a Counter object
 func NewCounter() *Counter {
-    return &Counter{
-        C: 0,
-    }
+	return &Counter{
+		C: 0,
+	}
 }
 
 // -----------
@@ -213,9 +217,9 @@ func (peers *Peers) GetAll() []Peer {
 
 // Count returns the number of peers
 func (peers *Peers) Count() int {
-    peers.mux.Lock()
-    defer peers.mux.Unlock()
-    return len(peers.P)
+	peers.mux.Lock()
+	defer peers.mux.Unlock()
+	return len(peers.P)
 }
 
 // WebsiteMap
@@ -307,101 +311,102 @@ func (w *Website) IncVersion() {
 // SaveMetadata write/overwrite a metadata file in the website folder
 func (w *Website) SaveMetadata() {
 	jsonData, err := json.Marshal(w)
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	err = ioutil.WriteFile(utils.MetadataDir+w.Name, jsonData, 0644)
-    utils.CheckError(err)
+	utils.CheckError(err)
 }
 
 // Owned checks if the private key for this website is present which means this
 // node owns the website
 func (w *Website) Owned() bool {
-    _, err := os.Stat(utils.KeyDir + w.Name)
-    return (err == nil)
+	_, err := os.Stat(utils.KeyDir + w.Name)
+	return (err == nil)
 }
 
 // Sign scans the website folder hashing all files in order to create the
 // contents.json file with the website's signature
 func (w *Website) Sign() {
-    var hashes []byte
-    var contents map[string]string = make(map[string]string)
+	var hashes []byte
+	var contents = make(map[string]string)
 
-    err := filepath.Walk(utils.WebsiteDir + w.Name, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        if info.Mode().IsRegular() && info.Name() != "contents.json" {
-            data, err := ioutil.ReadFile(path)
-            if err != nil {
-                return err
-            }
-            hash := sha256.Sum256(data)
-            hashes = append(hashes, hash[:]...)
-            contents[path] = hex.EncodeToString(hash[:])
-        }
-        return nil
-    })
-    utils.CheckError(err)
+	err := filepath.Walk(utils.WebsiteDir+w.Name, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() && info.Name() != "contents.json" {
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			hash := sha256.Sum256(data)
+			hashes = append(hashes, hash[:]...)
+			contents[path] = hex.EncodeToString(hash[:])
+		}
+		return nil
+	})
+	utils.CheckError(err)
 
-    privKey := w2pcrypto.LoadPrivateKey(w.Name)
-    sig := privKey.SignMessage(hashes)
-    contents["signature"] = sig
+	privKey := w2pcrypto.LoadPrivateKey(w.Name)
+	sig := privKey.SignMessage(hashes)
+	contents["signature"] = sig
 
-    jsonData, err := json.Marshal(contents)
-    utils.CheckError(err)
+	jsonData, err := json.Marshal(contents)
+	utils.CheckError(err)
 
-    path := utils.WebsiteDir + w.Name + "/contents.json"
-    err = ioutil.WriteFile(path, jsonData, 0600)
-    utils.CheckError(err)
+	path := utils.WebsiteDir + w.Name + "/contents.json"
+	err = ioutil.WriteFile(path, jsonData, 0600)
+	utils.CheckError(err)
 }
 
+// Verify verifies if the Website is signed by the owner
 func (w *Website) Verify() bool {
-    var hashes []byte
-    var contents map[string]string = make(map[string]string)
+	var hashes []byte
+	var contents = make(map[string]string)
 
-    path := utils.WebsiteDir + w.Name + "/contents.json"
-    data, err := ioutil.ReadFile(path)
-    utils.CheckError(err)
+	path := utils.WebsiteDir + w.Name + "/contents.json"
+	data, err := ioutil.ReadFile(path)
+	utils.CheckError(err)
 
-    err = json.Unmarshal(data, contents)
-    utils.CheckError(err)
+	err = json.Unmarshal(data, contents)
+	utils.CheckError(err)
 
-    // Verifying each file's hash
-    err = filepath.Walk(utils.WebsiteDir + w.Name, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        if info.Mode().IsRegular() && info.Name() != "contents.json" {
-            data, err := ioutil.ReadFile(path)
-            if err != nil {
-                return err
-            }
+	// Verifying each file's hash
+	err = filepath.Walk(utils.WebsiteDir+w.Name, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() && info.Name() != "contents.json" {
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
 
-            hash := sha256.Sum256(data)
-            hashStr := hex.EncodeToString(hash[:])
-            if hashStr != contents[path] {
-                err = errors.New("VerificationError")
-                return err
-            }
+			hash := sha256.Sum256(data)
+			hashStr := hex.EncodeToString(hash[:])
+			if hashStr != contents[path] {
+				err = errors.New("VerificationError")
+				return err
+			}
 
-            hashes = append(hashes, hash[:]...)
-            contents[path] = hex.EncodeToString(hash[:])
-        }
-        return nil
-    })
-    if err != nil {
-        return false
-    }
+			hashes = append(hashes, hash[:]...)
+			contents[path] = hex.EncodeToString(hash[:])
+		}
+		return nil
+	})
+	if err != nil {
+		return false
+	}
 
-    // Verifying signature
-    return w.PubKey.VerifySignature(hashes, contents["signature"])
+	// Verifying signature
+	return w.PubKey.VerifySignature(hashes, contents["signature"])
 }
 
 // Bundle creates a compressed archive of a website folder for seeding
 func (w *Website) Bundle() {
 	file, err := os.Create(utils.SeedDir + w.Name)
 	defer file.Close()
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	gzw := gzip.NewWriter(file)
 	defer gzw.Close()
@@ -443,18 +448,18 @@ func (w *Website) Bundle() {
 
 		return nil
 	})
-    utils.CheckError(err)
+	utils.CheckError(err)
 }
 
 // Unbundle uncompress and unarchive a website to display it
 func (w *Website) Unbundle() {
 	archive, err := os.Open(utils.SeedDir + w.Name)
 	defer archive.Close()
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	gzr, err := gzip.NewReader(archive)
 	defer gzr.Close()
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	tr := tar.NewReader(gzr)
 
@@ -463,7 +468,7 @@ func (w *Website) Unbundle() {
 		if err == io.EOF {
 			break
 		}
-    utils.CheckError(err)
+		utils.CheckError(err)
 
 		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
 
@@ -472,21 +477,21 @@ func (w *Website) Unbundle() {
 			_, err := os.Stat(target)
 			if err != nil {
 				err = os.MkdirAll(target, 0755)
-                utils.CheckError(err)
+				utils.CheckError(err)
 			}
 
 		case tar.TypeReg:
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			defer f.Close()
-            utils.CheckError(err)
+			utils.CheckError(err)
 
 			_, err = io.Copy(f, tr)
-            utils.CheckError(err)
+			utils.CheckError(err)
 		}
 	}
-    if !w.Verify() {
-        log.Fatalf("[UNBUNDLE] Signatue for %v does not match\n", w.Name)
-    }
+	if !w.Verify() {
+		log.Fatalf("[UNBUNDLE] Signatue for %v does not match\n", w.Name)
+	}
 }
 
 // GenPieces generates the pieces from the website archive and set it in
@@ -495,7 +500,7 @@ func (w *Website) GenPieces(pieceLength int) {
 	w.PieceLength = pieceLength
 
 	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
-    utils.CheckError(err)
+	utils.CheckError(err)
 
 	rest := data
 	var chunk []byte
@@ -521,45 +526,45 @@ func (w *Website) GenPieces(pieceLength int) {
 
 // Read returns the current value
 func (c *Counter) Read() int {
-    c.mux.RLock()
-    defer c.mux.RUnlock()
-    return c.C
+	c.mux.RLock()
+	defer c.mux.RUnlock()
+	return c.C
 }
 
 // Inc adds 1 to the current value
 func (c *Counter) Inc() {
-    c.mux.Lock()
-    defer c.mux.Unlock()
-    c.C++
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	c.C++
 }
 
 // Dec substracts 1 from the current value
 func (c *Counter) Dec() {
-    c.mux.Lock()
-    defer c.mux.Unlock()
-    if (c.C - 1) < 0 {
-        c.C = 0
-    } else {
-        c.C--
-    }
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	if (c.C - 1) < 0 {
+		c.C = 0
+	} else {
+		c.C--
+	}
 }
 
 // Routing table
 
 // Get returns the value peer through which to send the packet or dst
 func (rt *RoutingTable) Get(dst string) *Peer {
-    rt.mux.Lock()
-    defer rt.mux.Unlock()
-    via := rt.R[dst]
-    if via == nil {
-        via = ParsePeer(dst)
-    }
-    return via
+	rt.mux.Lock()
+	defer rt.mux.Unlock()
+	via := rt.R[dst]
+	if via == nil {
+		via = ParsePeer(dst)
+	}
+	return via
 }
 
 // Set adds a new entry or updates an existing one in the routing table
 func (rt *RoutingTable) Set(dst string, via *Peer) {
-    rt.mux.Lock()
-    defer rt.mux.Unlock()
-    rt.R[dst] = via
+	rt.mux.Lock()
+	defer rt.mux.Unlock()
+	rt.R[dst] = via
 }

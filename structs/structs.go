@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -55,7 +54,7 @@ type Website struct {
 // if a Peer is not directly reachable
 type RoutingTable struct {
 	mux sync.Mutex
-	R   map[string]*Peers
+	R   map[string]*Peer
 }
 
 // ----------------
@@ -65,9 +64,8 @@ type RoutingTable struct {
 // ParsePeer construct a Peer from a string of format "addr:port"
 func ParsePeer(peerString string) *Peer {
 	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
-    utils.CheckError(err)
+  utils.CheckError(err)
 	peer := Peer(*udpAddr)
-
 	return &peer
 }
 
@@ -76,7 +74,6 @@ func ParsePeer(peerString string) *Peer {
 func ParsePeers(peersString string) *Peers {
 	if peersString != "" {
 		addrList := strings.Split(peersString, ",")
-
 		peers := NewPeers()
 
 		for _, addr := range addrList {
@@ -134,7 +131,7 @@ func LoadWebsite(name string) *Website {
 // NewRoutingTable constructs a RoutingTable object
 func NewRoutingTable() *RoutingTable {
 	return &RoutingTable{
-		R: make(map[string]*Peers),
+		R: make(map[string]*Peer),
 	}
 }
 
@@ -404,7 +401,6 @@ func (w *Website) Bundle() {
 		}
 
 		header.Name = path
-
 		err = tw.WriteHeader(header)
 		if err != nil {
 			return err
@@ -445,12 +441,10 @@ func (w *Website) Unbundle() {
 
 	for {
 		header, err := tr.Next()
-
 		if err == io.EOF {
 			break
 		}
-
-        utils.CheckError(err)
+    utils.CheckError(err)
 
 		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
 
@@ -502,4 +496,24 @@ func (w *Website) GenPieces(pieceLength int) {
 	pieces = pieces + hash
 
 	w.Pieces = pieces
+}
+
+// Routing table
+
+// Get returns the value peer through which to send the packet or dst
+func (rt *RoutingTable) Get(dst string) *Peer {
+    rt.mux.Lock()
+    defer rt.mux.Unlock()
+    via := rt.R[dst]
+    if via == nil {
+        via = ParsePeer(dst)
+    }
+    return via
+}
+
+// Set adds a new entry or updates an existing one in the routing table
+func (rt *RoutingTable) Set(dst string, via *Peer) {
+    rt.mux.Lock()
+    defer rt.mux.Unlock()
+    rt.R[dst] = via
 }

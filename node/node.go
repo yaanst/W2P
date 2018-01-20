@@ -387,6 +387,9 @@ func (n *Node) RetrieveWebsite(name string) {
 
 	log.Println("[WEBSITES]\tUnbundling website '" + name + "'")
 	website.Unbundle()
+
+	log.Println("[WEBSITES]\tSaving metadata for '" + name + "'")
+	website.SaveMetadata()
 }
 
 // RetrievePiece retrieves a piece from a website archive and input it in a channel

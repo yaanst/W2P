@@ -238,33 +238,31 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
 
-		if lWeb.PubKey.String() != rWeb.PubKey.String() {
-			log.Fatalf("[WEBSITEMAP] Public keys not matching for local/remote website %v\n", lWeb.Name)
-		}
+		if lWeb == nil {
+			log.Print("[WEBSITEMAP]\tAdding website '" + rWeb.Name + "'")
+			localWM.Set(rWeb)
+			n.RetrieveWebsite(rWeb.Name)
+		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
+			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
+		} else if rWeb.Version > lWeb.Version {
+			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
+			lWeb.Version = rWeb.Version
+			lWeb.SetKeywords(rWeb.GetKeywords())
+			lWeb.Pieces = rWeb.Pieces
 
-		if lWeb != nil {
-			log.Print("[WEBSITEMAP] Updating website", lWeb.Name)
-			if rWeb.Version > lWeb.Version {
-				lWeb.Version = rWeb.Version
-				lWeb.SetKeywords(rWeb.GetKeywords())
-				lWeb.Pieces = rWeb.Pieces
-
-				// Add missing seeders for lWeb
-				for _, rPeer := range rWeb.GetSeeders() {
-					if !lWeb.Seeders.Contains(&rPeer) {
-						lWeb.Seeders.Add(&rPeer)
-					}
-				}
-				// Remove extra seeders for lWeb
-				for _, lPeer := range lWeb.GetSeeders() {
-					if !rWeb.Seeders.Contains(&lPeer) {
-						lWeb.Seeders.Remove(&lPeer)
-					}
+			// Add missing seeders for lWeb
+			for _, rPeer := range rWeb.GetSeeders() {
+				if !lWeb.Seeders.Contains(&rPeer) {
+					lWeb.Seeders.Add(&rPeer)
 				}
 			}
-		} else {
-			log.Print("[WEBSITEMAP] Adding website", rWeb)
-			localWM.Set(rWeb)
+			// Remove extra seeders for lWeb
+			for _, lPeer := range lWeb.GetSeeders() {
+				if !rWeb.Seeders.Contains(&lPeer) {
+					lWeb.Seeders.Remove(&lPeer)
+				}
+			}
+			n.RetrieveWebsite(rWeb.Name)
 		}
 	}
 }
@@ -341,7 +339,7 @@ func (n *Node) Search(search string) []string {
 }
 
 // RetrieveWebsite retrieve the archive of a website in order to display it itself
-func (n *Node) RetrieveWebsite(name string, ch chan int) {
+func (n *Node) RetrieveWebsite(name string) {
 	log.Println("[PIECES]\tRetrieving pieces for website '" + name + "'")
 	website := n.WebsiteMap.Get(name)
 
@@ -349,7 +347,7 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 	numPieces := len(pieces) / 8
 	chans := make([]chan []byte, numPieces)
 
-	for i := 0; i <= numPieces; i++ {
+	for i := 0; i < numPieces; i++ {
 		piece := pieces[:i*8]
 		chans[i] = make(chan []byte, 1)
 		go n.RetrievePiece(website, piece, chans[i])
@@ -393,7 +391,7 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	for _, seeder := range website.GetSeeders() {
-		log.Println("[PIECES]\tRetrieving piece " + piece + " for website '" +
+		log.Println("[PIECES]\tRetrieving piece '" + piece + "' for website '" +
 			website.Name + "' by '" + seeder.String() + "'")
 		rAddr := net.UDPAddr(seeder)
 		// Create a random local address for a new connection
@@ -404,9 +402,8 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		}
 		lAddr := net.UDPAddr(*tempPeer)
 
-		// try 2 deifferent ports
+		// try 2 different ports
 		conn, err := net.DialUDP("udp4", &lAddr, &rAddr)
-		defer conn.Close()
 		if err != nil {
 			tempPeer.Port++
 			lAddr := net.UDPAddr(*tempPeer)
@@ -415,6 +412,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 				log.Fatal(err)
 			}
 		}
+		defer conn.Close()
 
 		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
@@ -437,10 +435,10 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 			hash := hex.EncodeToString(sum[:])
 
 			if hash != piece {
-				log.Println("[PIECES]\tBad piece " + piece + " for website '" +
+				log.Println("[PIECES]\tBad piece '" + piece + "' for website '" +
 					website.Name + "' by '" + seeder.String() + "'")
 			} else {
-				log.Println("[PIECES]\tGood piece " + piece + " for website '" +
+				log.Println("[PIECES]\tGood piece '" + piece + "' for website '" +
 					website.Name + "' by '" + seeder.String() + "'")
 				c <- data
 				return
@@ -468,7 +466,7 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 			// need to check for checksum here
 			reply := comm.NewDataReply(request, data)
 			reply.Send(n.Conn, reply.Dest)
-			log.Println("[PIECES]\tSent piece " + piece + " for website '" +
+			log.Println("[SENT]\tPiece '" + piece + "' for website '" +
 				website.Name + "' to '" + reply.Dest.String() + "'")
 			return
 		}

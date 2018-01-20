@@ -128,8 +128,6 @@ func LoadWebsite(name string) *Website {
 	jsonData, err := ioutil.ReadFile(utils.MetadataDir + name)
 	utils.CheckError(err)
 
-	log.Println(jsonData)
-
 	website := &Website{}
 	err = json.Unmarshal(jsonData, website)
 	utils.CheckError(err)

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+    "errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -63,8 +64,7 @@ type RoutingTable struct {
 // ParsePeer construct a Peer from a string of format "addr:port"
 func ParsePeer(peerString string) *Peer {
 	udpAddr, err := net.ResolveUDPAddr("udp4", peerString)
-    utils.CheckError(err)
-
+  utils.CheckError(err)
 	peer := Peer(*udpAddr)
 	return &peer
 }
@@ -294,6 +294,90 @@ func (w *Website) SaveMetadata() {
     utils.CheckError(err)
 }
 
+// Owned checks if the private key for this website is present which means this
+// node owns the website
+func (w *Website) Owned() bool {
+    _, err := os.Stat(utils.KeyDir + w.Name)
+    return (err == nil)
+}
+
+// Sign scans the website folder hashing all files in order to create the
+// contents.json file with the website's signature
+func (w *Website) Sign() {
+    var hashes []byte
+    var contents map[string]string = make(map[string]string)
+
+    err := filepath.Walk(utils.WebsiteDir + w.Name, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        if info.Mode().IsRegular() && info.Name() != "contents.json" {
+            data, err := ioutil.ReadFile(path)
+            if err != nil {
+                return err
+            }
+            hash := sha256.Sum256(data)
+            hashes = append(hashes, hash[:]...)
+            contents[path] = hex.EncodeToString(hash[:])
+        }
+        return nil
+    })
+    utils.CheckError(err)
+
+    privKey := w2pcrypto.LoadPrivateKey(w.Name)
+    sig := privKey.SignMessage(hashes)
+    contents["signature"] = sig
+
+    jsonData, err := json.Marshal(contents)
+    utils.CheckError(err)
+
+    path := utils.WebsiteDir + w.Name + "/contents.json"
+    err = ioutil.WriteFile(path, jsonData, 0600)
+    utils.CheckError(err)
+}
+
+func (w *Website) Verify() bool {
+    var hashes []byte
+    var contents map[string]string = make(map[string]string)
+
+    path := utils.WebsiteDir + w.Name + "/contents.json"
+    data, err := ioutil.ReadFile(path)
+    utils.CheckError(err)
+
+    err = json.Unmarshal(data, contents)
+    utils.CheckError(err)
+
+    // Verifying each file's hash
+    err = filepath.Walk(utils.WebsiteDir + w.Name, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        if info.Mode().IsRegular() && info.Name() != "contents.json" {
+            data, err := ioutil.ReadFile(path)
+            if err != nil {
+                return err
+            }
+
+            hash := sha256.Sum256(data)
+            hashStr := hex.EncodeToString(hash[:])
+            if hashStr != contents[path] {
+                err = errors.New("VerificationError")
+                return err
+            }
+
+            hashes = append(hashes, hash[:]...)
+            contents[path] = hex.EncodeToString(hash[:])
+        }
+        return nil
+    })
+    if err != nil {
+        return false
+    }
+
+    // Verifying signature
+    return w.PubKey.VerifySignature(hashes, contents["signature"])
+}
+
 // Bundle creates a compressed archive of a website folder for seeding
 func (w *Website) Bundle() {
 	file, err := os.Create(utils.SeedDir + w.Name)
@@ -360,7 +444,7 @@ func (w *Website) Unbundle() {
 		if err == io.EOF {
 			break
 		}
-        utils.CheckError(err)
+    utils.CheckError(err)
 
 		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
 
@@ -381,6 +465,9 @@ func (w *Website) Unbundle() {
             utils.CheckError(err)
 		}
 	}
+    if !w.Verify() {
+        log.Fatalf("[UNBUNDLE] Signatue for %v does not match\n", w.Name)
+    }
 }
 
 // GenPieces generates the pieces from the website archive and set it in

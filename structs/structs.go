@@ -57,6 +57,11 @@ type RoutingTable struct {
 	R   map[string]*Peer
 }
 
+type Counter struct {
+    mux sync.RWMutex
+    C   int
+}
+
 // ----------------
 // - Constructors -
 // ----------------
@@ -135,6 +140,13 @@ func NewRoutingTable() *RoutingTable {
 	}
 }
 
+// NewCounter constructs a Counter object
+func NewCounter() *Counter {
+    return &Counter{
+        C: 0,
+    }
+}
+
 // -----------
 // - Methods -
 // -----------
@@ -197,6 +209,13 @@ func (peers *Peers) GetAll() []Peer {
 	peers.mux.Unlock()
 
 	return peerList
+}
+
+// Count returns the number of peers
+func (peers *Peers) Count() int {
+    peers.mux.Lock()
+    defer peers.mux.Unlock()
+    return len(peers.P)
 }
 
 // WebsiteMap
@@ -496,6 +515,33 @@ func (w *Website) GenPieces(pieceLength int) {
 	pieces = pieces + hash
 
 	w.Pieces = pieces
+}
+
+// Counter
+
+// Read returns the current value
+func (c *Counter) Read() int {
+    c.mux.RLock()
+    defer c.mux.RUnlock()
+    return c.C
+}
+
+// Inc adds 1 to the current value
+func (c *Counter) Inc() {
+    c.mux.Lock()
+    defer c.mux.Unlock()
+    c.C++
+}
+
+// Dec substracts 1 from the current value
+func (c *Counter) Dec() {
+    c.mux.Lock()
+    defer c.mux.Unlock()
+    if (c.C - 1) < 0 {
+        c.C = 0
+    } else {
+        c.C--
+    }
 }
 
 // Routing table

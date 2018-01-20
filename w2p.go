@@ -24,7 +24,7 @@ func main() {
 	node := node.NewNode(name, addr, peers)
 	node.Init()
 
-	go node.AntiEntropy(5 * time.Second)
+	go node.AntiEntropy(3 * time.Second)
 
 	go node.Listen()
 

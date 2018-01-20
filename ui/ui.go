@@ -1,12 +1,13 @@
 package ui
 
 import (
-	"fmt"
-	"strings"
-    "runtime"
-    "os/exec"
-	"net/http"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os/exec"
+	"runtime"
+	"strings"
 
 	"github.com/yaanst/W2P/node"
 	"github.com/yaanst/W2P/utils"
@@ -44,6 +45,8 @@ func ImportWebsite(node *node.Node) http.HandlerFunc {
 			keywordsString := strings.Join(request.Form["keywords"], "")
 			keywords := strings.Split(keywordsString, ",")
 
+			log.Println("[WEBSITES] Importing new website '" + name + "'")
+
 			if name != "" {
 				node.AddNewWebsite(name, keywords)
 			}
@@ -68,11 +71,12 @@ func UpdateWebsite(node *node.Node) http.HandlerFunc {
 
 // ServeUI serves the UI page
 func ServeUI() http.Handler {
-    return http.FileServer(http.Dir(utils.UIDir))
+	return http.FileServer(http.Dir(utils.UIDir))
 }
+
 // ServeWebsites serves the website folder
 func ServeWebsites() http.Handler {
-    return http.StripPrefix("/w/", http.FileServer(http.Dir(utils.WebsiteDir)))
+	return http.StripPrefix("/w/", http.FileServer(http.Dir(utils.WebsiteDir)))
 }
 
 // OpenBrowser starts the user's browser on the UI's URL
@@ -80,27 +84,27 @@ func OpenBrowser(url string) {
 	var err error
 
 	switch runtime.GOOS {
-        case "linux":
-            err = exec.Command("xdg-open", url).Start()
-        case "windows":
-            err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-        case "darwin":
-            err = exec.Command("open", url).Start()
-        default:
-            err = fmt.Errorf("Cannot open browser, unsupported platform")
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("Cannot open browser, unsupported platform")
 	}
-    utils.CheckError(err)
+	utils.CheckError(err)
 }
 
 // StartServer starts listening and serving on addr
 func StartServer(uiPort string, node *node.Node) {
-    http.Handle("/", ServeUI())
-    http.Handle("/w/", ServeWebsites())
-    http.Handle("/list", ListWebsites(node))
-    http.HandleFunc("/scan", ScanWebsiteFolder)
-    http.HandleFunc("/share", ImportWebsite(node))
-    http.HandleFunc("/update", UpdateWebsite(node))
+	http.Handle("/", ServeUI())
+	http.Handle("/w/", ServeWebsites())
+	http.Handle("/list", ListWebsites(node))
+	http.HandleFunc("/scan", ScanWebsiteFolder)
+	http.HandleFunc("/share", ImportWebsite(node))
+	http.HandleFunc("/update", UpdateWebsite(node))
 
-    go OpenBrowser("http://127.0.0.1:"+uiPort)
-    http.ListenAndServe("127.0.0.1:" + uiPort, nil)
+	go OpenBrowser("http://127.0.0.1:" + uiPort)
+	http.ListenAndServe("127.0.0.1:"+uiPort, nil)
 }

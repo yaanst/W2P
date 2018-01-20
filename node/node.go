@@ -104,37 +104,52 @@ func (n *Node) Init() {
 // AddWebsite constructs a Website object that already has a metadatafile and
 // adds it to the WebsiteMap
 func (n *Node) AddWebsite(name string) {
+	log.Println("[WEBSITES]\tLoading website '" + name + "'")
 	website := structs.LoadWebsite(name)
 
 	n.WebsiteMap.Set(website)
+	log.Println("[WEBSITES]\tSuccesfully loaded website '" + name + "' !")
 }
 
 // AddNewWebsite constructs a new website that has no metadatafile and adds
 // it to the WebsiteMap
 func (n *Node) AddNewWebsite(name string, keywords []string) {
+	log.Println("[WEBSITES]\tAdding new website '" + name + "'")
 	website := structs.NewWebsite(name, keywords)
 
+	log.Println("[WEBSITES]\t\tBundling website '" + name + "'")
 	website.Bundle()
 
+	log.Println("[WEBSITES]\t\tGenerating pieces for website '" + name + "'")
 	website.GenPieces(utils.DefaultPieceLength)
 	website.Seeders.Add(n.Addr)
+
+	log.Println("[WEBSITES]\t\tSaving Metadata for website '" + name + "'")
 	website.SaveMetadata()
 
 	n.WebsiteMap.Set(website)
+	log.Println("[WEBSITES]\tSuccesfully added website '" + name + "' !")
 }
 
 // UpdateWebsite update a Website in the WebsiteMap when user modified
 // his website
 func (n *Node) UpdateWebsite(name string, keywords []string) {
+	log.Println("[WEBSITES]\tUpdating website '" + name + "'")
 	website := n.WebsiteMap.Get(name)
 
+	log.Println("[WEBSITES]\t\tOverwritting bundle of website '" + name + "'")
 	website.Bundle()
 
 	website.SetKeywords(keywords)
+
+	log.Println("[WEBSITES]\t\tGenerating new pieces for website '" + name + "'")
 	website.GenPieces(utils.DefaultPieceLength)
 	website.IncVersion()
+
+	log.Println("[WEBSITES]\t\tSaving new Metadata for website '" + name + "'")
 	website.SaveMetadata()
 
+	log.Println("[WEBSITES]\tSuccesfully updated website '" + name + "' !")
 }
 
 // SendWebsiteMap shares the node's WebsiteMap with other nodes
@@ -143,7 +158,7 @@ func (n *Node) SendWebsiteMap() {
 	for _, p := range n.Peers.GetAll() {
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
 		message.Send(n.Conn, &p)
-		log.Println("[SENT] WebsiteMap to", p.String())
+		log.Println("[SENT]\tWebsiteMap to", p.String())
 	}
 }
 
@@ -168,7 +183,7 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 
 	message.Send(conn, peer)
 
-	log.Println("[SENT] Heartbeat to", peer.String())
+	log.Println("[SENT]\tHeartbeat to", peer.String())
 
 	size, err := conn.Read(buffer)
 	if err != nil {
@@ -186,11 +201,11 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 
 	reachable := <-c
 	if !reachable {
-		log.Println("[HEARTBEAT] Peer", peer, "is down")
+		log.Println("[HEARTBEAT]\tPeer", peer, "is down")
 		n.Peers.Remove(peer)
 		n.WebsiteMap.RemovePeer(peer)
 	} else {
-		log.Println("[HEARTBEAT] Peer", peer, "is up")
+		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
 		n.Peers.Add(peer)
 	}
 }
@@ -240,7 +255,7 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 func (n *Node) Listen() {
 	buffer := make([]byte, utils.ListenBufferSize)
 
-	log.Println("[LISTENING] on", n.Addr.String())
+	log.Println("[LISTENING]\ton", n.Addr.String())
 
 	for {
 		_, _, err := n.Conn.ReadFromUDP(buffer)
@@ -258,13 +273,13 @@ func (n *Node) Listen() {
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
-			log.Println("[RECEIVE] Heartbeat from " + orig.String())
+			log.Println("[RECEIVE]\tHeartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
 			heartbeat.Send(n.Conn, orig) //TODO use routing table
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
-			log.Println("[RECEIVE] WebsiteMap from " + orig.String())
+			log.Println("[RECEIVE]\tWebsiteMap from " + orig.String())
 			go n.CheckPeer(orig)
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
@@ -274,7 +289,7 @@ func (n *Node) Listen() {
 
 			// DataRequest
 			if msgData.Data != nil {
-				log.Println("[RECEIVE] DataRequest from " + orig.String())
+				log.Println("[RECEIVE]\tDataRequest from " + orig.String())
 				go n.SendPiece(message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
 			} else {
 				//TODO ??? (I think it is not needed because you open temporary
@@ -304,6 +319,7 @@ func (n *Node) Search(search string) []string {
 
 // RetrieveWebsite retrieve the archive of a website in order to display it itself
 func (n *Node) RetrieveWebsite(name string, ch chan int) {
+	log.Println("[PIECES]\tRetrieving pieces for website '" + name + "'")
 	website := n.WebsiteMap.Get(name)
 
 	pieces := website.Pieces
@@ -340,17 +356,22 @@ func (n *Node) RetrieveWebsite(name string, ch chan int) {
 		okPiece += <-ok
 	}
 
+	log.Println("[PIECES]\tSuccessful retrieval for website '" + name + "'")
+
 	// archive is now complete we can unbundle it and seed it
 	// TODO need to checksum this !
 
 	website.AddSeeder(n.Addr)
 
+	log.Println("[WEBSITES]\tUnbundling website '" + name + "'")
 	website.Unbundle()
 }
 
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	for _, seeder := range website.GetSeeders() {
+		log.Println("[PIECES]\tRetrieving piece " + piece + " for website '" +
+			website.Name + "' by '" + seeder.String() + "'")
 		rAddr := net.UDPAddr(seeder)
 		// Create a random local address for a new connection
 		tempPeer := &structs.Peer{
@@ -392,8 +413,11 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 			hash := hex.EncodeToString(sum[:])
 
 			if hash != piece {
-				log.Println("bad piece " + piece + " for " + website.Name)
+				log.Println("[PIECES]\tBad piece " + piece + " for website '" +
+					website.Name + "' by '" + seeder.String() + "'")
 			} else {
+				log.Println("[PIECES]\tGood piece " + piece + " for website '" +
+					website.Name + "' by '" + seeder.String() + "'")
 				c <- data
 				return
 			}
@@ -421,7 +445,9 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 			data = archiveData[offset : offset+website.PieceLength]
 			// need to check for checksum here
 			reply := comm.NewDataReply(request, data)
-			reply.Send(n.Conn, n.Addr)
+			reply.Send(n.Conn, reply.Dest)
+			log.Println("[PIECES]\tSent piece " + piece + " for website '" +
+				website.Name + "' to '" + reply.Dest.String() + "'")
 			return
 		}
 	}

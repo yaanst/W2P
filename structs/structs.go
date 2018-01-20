@@ -130,7 +130,9 @@ func LoadWebsite(name string) *Website {
 		log.Fatal(err)
 	}
 
-	var website *Website
+	log.Println(jsonData)
+
+	website := &Website{}
 	err = json.Unmarshal(jsonData, website)
 	if err != nil {
 		log.Fatal(err)

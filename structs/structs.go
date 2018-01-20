@@ -366,7 +366,7 @@ func (w *Website) Verify() bool {
 	data, err := ioutil.ReadFile(path)
 	utils.CheckError(err)
 
-	err = json.Unmarshal(data, contents)
+	err = json.Unmarshal(data, &contents)
 	utils.CheckError(err)
 
 	// Verifying each file's hash
@@ -412,7 +412,9 @@ func (w *Website) Bundle() {
 	tw := tar.NewWriter(gzw)
 	defer tw.Close()
 
-	err = filepath.Walk(utils.WebsiteDir+w.Name, func(path string, info os.FileInfo, err error) error {
+	target := utils.WebsiteDir + w.Name
+
+	err = filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -423,6 +425,9 @@ func (w *Website) Bundle() {
 		}
 
 		header.Name = path
+
+		log.Println("[BUNDLE]\t\tBundling '" + header.Name + "'")
+
 		err = tw.WriteHeader(header)
 		if err != nil {
 			return err
@@ -468,7 +473,8 @@ func (w *Website) Unbundle() {
 		}
 		utils.CheckError(err)
 
-		target := filepath.Join(utils.WebsiteDir+w.Name, header.Name)
+		target := header.Name
+		log.Println("[UNBUNDLE]\t\tUnbundling '" + target + "'")
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -488,7 +494,7 @@ func (w *Website) Unbundle() {
 		}
 	}
 	if !w.Verify() {
-		log.Fatalf("[UNBUNDLE] Signatue for %v does not match\n", w.Name)
+		log.Fatalf("[UNBUNDLE] Signature for %v does not match\n", w.Name)
 	}
 }
 
@@ -500,22 +506,22 @@ func (w *Website) GenPieces(pieceLength int) {
 	data, err := ioutil.ReadFile(utils.SeedDir + w.Name)
 	utils.CheckError(err)
 
-	rest := data
+	dataSize := len(data)
 	var chunk []byte
 	var pieces string
-	for i := pieceLength; i < len(data); i += pieceLength {
-		chunk = rest[:i]
+
+	for i := 0; i < len(data); i += pieceLength {
+		offsetStart := i
+		offsetEnd := i + pieceLength
+		if offsetEnd >= dataSize {
+			offsetEnd = dataSize
+		}
+		chunk = data[offsetStart:offsetEnd]
 
 		sum := sha256.Sum256(chunk)
 		hash := hex.EncodeToString(sum[:])
 		pieces = pieces + hash
-
-		rest = rest[i:]
 	}
-
-	sum := sha256.Sum256(rest)
-	hash := hex.EncodeToString(sum[:])
-	pieces = pieces + hash
 
 	w.Pieces = pieces
 }

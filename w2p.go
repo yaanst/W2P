@@ -14,7 +14,7 @@ func main() {
 	flag.StringVar(&name, "name", "test", "Name of the node")
 	flag.StringVar(&addr, "addr", "", "Address of the node format IP:PORT")
 	flag.StringVar(&peers, "peers", "", "Comma-separated list of peers in the form of IP:PORT")
-	flag.StringVar(&uiPort, "uiPort", "", "Port for the browser based UI")
+	flag.StringVar(&uiPort, "uiPort", "8000", "Port for the browser based UI")
 	flag.Parse()
 
 	log.Println("arg name:", name)
@@ -24,7 +24,7 @@ func main() {
 	node := node.NewNode(name, addr, peers)
 	node.Init()
 
-	go node.AntiEntropy(5 * time.Second)
+	go node.AntiEntropy(3 * time.Second)
 
 	go node.Listen()
 

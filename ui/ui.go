@@ -34,6 +34,20 @@ func ListWebsites(node *node.Node) http.HandlerFunc {
 	}
 }
 
+// FilterWebsites finds websites' names matching a given keyword
+func FilterWebsites(node *node.Node) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == "POST" {
+			request.ParseForm()
+			keyword := strings.Join(request.Form["keywords"], "")
+			websites := node.Search(keyword)
+			jsonData, err := json.Marshal(websites)
+			utils.CheckError(err)
+			fmt.Fprint(writer, string(jsonData))
+		}
+	}
+}
+
 // ImportWebsite imports a new website from the UI and add it to the
 // seeding websites (/share)
 func ImportWebsite(node *node.Node) http.HandlerFunc {
@@ -64,7 +78,8 @@ func UpdateWebsite(node *node.Node) http.HandlerFunc {
 			keywordsString := strings.Join(request.Form["keywords"], "")
 			keywords := strings.Split(keywordsString, ",")
 
-			node.UpdateWebsite(name, keywords)
+			success := node.UpdateWebsite(name, keywords)
+			fmt.Fprint(writer, success)
 		}
 	}
 }
@@ -102,6 +117,7 @@ func StartServer(uiPort string, node *node.Node) {
 	http.Handle("/w/", ServeWebsites())
 	http.Handle("/list", ListWebsites(node))
 	http.HandleFunc("/scan", ScanWebsiteFolder)
+	http.Handle("/filter", FilterWebsites(node))
 	http.HandleFunc("/share", ImportWebsite(node))
 	http.HandleFunc("/update", UpdateWebsite(node))
 

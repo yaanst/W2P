@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"io/ioutil"
 	"log"
 	"time"
+	"io/ioutil"
 )
 
 // ---------
@@ -35,8 +35,11 @@ const ListenBufferSize int = 65536
 // HeartBeatBufferSize is the default size for buffer waiting for a heartbeat
 const HeartBeatBufferSize int = 512
 
+// HeartBeatLimit is the default maximum number of concurrent heartbeats
+const HeartBeatLimit int = 50
+
 // HeartBeatTimeout is the default timeout for an answer from a peer
-const HeartBeatTimeout time.Duration = time.Duration(10000000000) // 10s
+const HeartBeatTimeout time.Duration = time.Duration(5000000000) // 5s
 
 // -----------
 // - Helpers -

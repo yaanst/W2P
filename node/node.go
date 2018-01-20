@@ -28,6 +28,7 @@ type Node struct {
 	Addr         *structs.Peer
 	Conn         *net.UDPConn
 	Peers        *structs.Peers
+	HBCounter    *structs.Counter
 	RoutingTable *structs.RoutingTable
 	WebsiteMap   *structs.WebsiteMap
 }
@@ -42,6 +43,7 @@ func NewNode(name, addrString, peersString string) *Node {
 	peers := structs.ParsePeers(peersString)
 	rt := structs.NewRoutingTable()
 	wm := structs.NewWebsiteMap()
+	hbCounter := structs.NewCounter()
 
 	connAddr := net.UDPAddr(*addr)
 	conn, err := net.ListenUDP("udp4", &connAddr)
@@ -52,6 +54,7 @@ func NewNode(name, addrString, peersString string) *Node {
 		Addr:         addr,
 		Conn:         conn,
 		Peers:        peers,
+		HBCounter:    hbCounter,
 		RoutingTable: rt,
 		WebsiteMap:   wm,
 	}
@@ -64,32 +67,25 @@ func NewNode(name, addrString, peersString string) *Node {
 // Init initialize a Node adding website already present on disk and checking
 // wether we have their metadata, also checking every dir is present
 func (n *Node) Init() {
+	var dirPerm os.FileMode = 0755
 	if _, err := os.Stat(utils.MetadataDir); err != nil {
-		err := os.MkdirAll(utils.MetadataDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.MetadataDir, dirPerm)
+		utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.SeedDir); err != nil {
-		err := os.MkdirAll(utils.SeedDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.SeedDir, dirPerm)
+		utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.WebsiteDir); err != nil {
-		err := os.MkdirAll(utils.WebsiteDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.WebsiteDir, dirPerm)
+		utils.CheckError(err)
 	}
 
 	if _, err := os.Stat(utils.KeyDir); err != nil {
-		err := os.MkdirAll(utils.KeyDir, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
+		err := os.MkdirAll(utils.KeyDir, dirPerm)
+		utils.CheckError(err)
 	}
 
 	websitesNames := utils.ScanDir(utils.WebsiteDir)
@@ -117,48 +113,62 @@ func (n *Node) AddNewWebsite(name string, keywords []string) {
 	log.Println("[WEBSITES]\tAdding new website '" + name + "'")
 	website := structs.NewWebsite(name, keywords)
 
-	log.Println("[WEBSITES]\t\tBundling website '" + name + "'")
-	website.Bundle()
+	if website != nil && website.Owned() {
+		log.Println("[WEBSITES]\t\tSigning website '" + name + "'")
+		website.Sign()
 
-	log.Println("[WEBSITES]\t\tGenerating pieces for website '" + name + "'")
-	website.GenPieces(utils.DefaultPieceLength)
-	website.Seeders.Add(n.Addr)
+		log.Println("[WEBSITES]\t\tBundling website '" + name + "'")
+		website.Bundle()
 
-	log.Println("[WEBSITES]\t\tSaving Metadata for website '" + name + "'")
-	website.SaveMetadata()
+		log.Println("[WEBSITES]\t\tGenerating pieces for website '" + name + "'")
+		website.GenPieces(utils.DefaultPieceLength)
+		website.Seeders.Add(n.Addr)
 
-	n.WebsiteMap.Set(website)
-	log.Println("[WEBSITES]\tSuccesfully added website '" + name + "' !")
+		log.Println("[WEBSITES]\t\tSaving Metadata for website '" + name + "'")
+		website.SaveMetadata()
+
+		n.WebsiteMap.Set(website)
+		log.Println("[WEBSITES]\tSuccesfully added website '" + name + "' !")
+	}
 }
 
 // UpdateWebsite update a Website in the WebsiteMap when user modified
 // his website
-func (n *Node) UpdateWebsite(name string, keywords []string) {
+func (n *Node) UpdateWebsite(name string, keywords []string) bool {
 	log.Println("[WEBSITES]\tUpdating website '" + name + "'")
 	website := n.WebsiteMap.Get(name)
 
-	log.Println("[WEBSITES]\t\tOverwritting bundle of website '" + name + "'")
-	website.Bundle()
+	if website != nil && website.Owned() {
+		log.Println("[WEBSITES]\t\tRe-signing website '" + name + "'")
+		website.Sign()
 
-	website.SetKeywords(keywords)
+		log.Println("[WEBSITES]\t\tOverwritting bundle of website '" + name + "'")
+		website.Bundle()
 
-	log.Println("[WEBSITES]\t\tGenerating new pieces for website '" + name + "'")
-	website.GenPieces(utils.DefaultPieceLength)
-	website.IncVersion()
+		website.SetKeywords(keywords)
 
-	log.Println("[WEBSITES]\t\tSaving new Metadata for website '" + name + "'")
-	website.SaveMetadata()
+		log.Println("[WEBSITES]\t\tGenerating new pieces for website '" + name + "'")
+		website.GenPieces(utils.DefaultPieceLength)
+		website.IncVersion()
 
-	log.Println("[WEBSITES]\tSuccesfully updated website '" + name + "' !")
+		log.Println("[WEBSITES]\t\tSaving new Metadata for website '" + name + "'")
+		website.SaveMetadata()
+
+		log.Println("[WEBSITES]\tSuccesfully updated website '" + name + "' !")
+
+		return true
+	}
+	return false
 }
 
 // SendWebsiteMap shares the node's WebsiteMap with other nodes
 func (n *Node) SendWebsiteMap() {
-	//TODO: Send to ALL or subset or random but more frequently?
 	for _, p := range n.Peers.GetAll() {
 		message := comm.NewMeta(n.Addr, &p, n.WebsiteMap)
-		message.Send(n.Conn, &p)
-		log.Println("[SENT]\tWebsiteMap to", p.String())
+		via := n.RoutingTable.Get(p.String())
+		message.Send(n.Conn, via)
+		log.Println("[SENT] WebsiteMap to", p.String())
+		n.CheckPeer(&p)
 	}
 }
 
@@ -176,12 +186,14 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	defer conn.Close()
 	utils.CheckError(err)
 
+	// Set Read timeout
 	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
 	message := comm.NewHeartbeat(tempPeer, peer)
 	buffer := make([]byte, utils.HeartBeatBufferSize)
 
-	message.Send(conn, peer)
+	via := n.RoutingTable.Get(peer.String())
+	message.Send(conn, via)
 
 	log.Println("[SENT]\tHeartbeat to", peer.String())
 
@@ -196,6 +208,12 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 
 // CheckPeer checks if peer is up and removes it from every location if not
 func (n *Node) CheckPeer(peer *structs.Peer) {
+	for n.HBCounter.Read() >= utils.HeartBeatLimit {
+		time.Sleep(50 * time.Millisecond)
+	}
+	n.HBCounter.Inc()
+	defer n.HBCounter.Dec()
+
 	c := make(chan bool)
 	go n.HeartBeat(peer, c)
 
@@ -207,6 +225,7 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 	} else {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
 		n.Peers.Add(peer)
+		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
 }
 
@@ -219,34 +238,33 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
 
-		if lWeb != nil {
-			if rWeb.Version > lWeb.Version {
-				// Update version
-				for lWeb.Version < rWeb.Version {
-					lWeb.IncVersion()
-				}
-				// Update keywords
-				lWeb.SetKeywords(rWeb.GetKeywords())
+		if lWeb.PubKey.String() != rWeb.PubKey.String() {
+			log.Fatalf("[WEBSITEMAP] Public keys not matching for local/remote website %v\n", lWeb.Name)
+		}
 
-				// Update Pieces
+		if lWeb != nil {
+			log.Print("[WEBSITEMAP] Updating website", lWeb.Name)
+			if rWeb.Version > lWeb.Version {
+				lWeb.Version = rWeb.Version
+				lWeb.SetKeywords(rWeb.GetKeywords())
 				lWeb.Pieces = rWeb.Pieces
 
-				// Update seeders
-				// For all remoteWebsite seeders
+				// Add missing seeders for lWeb
 				for _, rPeer := range rWeb.GetSeeders() {
-					// If not already present -> add them to website directly
 					if !lWeb.Seeders.Contains(&rPeer) {
 						lWeb.Seeders.Add(&rPeer)
 					}
 				}
-				// For all localWebsite seeders
+				// Remove extra seeders for lWeb
 				for _, lPeer := range lWeb.GetSeeders() {
-					// If not present -> remove them from  website
 					if !rWeb.Seeders.Contains(&lPeer) {
 						lWeb.Seeders.Remove(&lPeer)
 					}
 				}
 			}
+		} else {
+			log.Print("[WEBSITEMAP] Adding website", rWeb)
+			localWM.Set(rWeb)
 		}
 	}
 }
@@ -258,7 +276,8 @@ func (n *Node) Listen() {
 	log.Println("[LISTENING]\ton", n.Addr.String())
 
 	for {
-		_, _, err := n.Conn.ReadFromUDP(buffer)
+		_, senderAddr, err := n.Conn.ReadFromUDP(buffer)
+		sender := structs.ParsePeer(senderAddr.String())
 		utils.CheckError(err)
 
 		message := comm.DecodeMessage(buffer)
@@ -267,15 +286,23 @@ func (n *Node) Listen() {
 
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
-			//TODO routing table
-			continue
+			via := n.RoutingTable.Get(dest.String())
+			message.Send(n.Conn, via)
+		}
+
+		// Update RoutingTable
+		if !structs.PeerEquals(orig, sender) {
+			n.RoutingTable.Set(orig.String(), sender)
+		} else {
+			n.RoutingTable.Set(orig.String(), orig)
 		}
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
 			log.Println("[RECEIVE]\tHeartbeat from " + orig.String())
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			heartbeat.Send(n.Conn, orig) //TODO use routing table
+			via := n.RoutingTable.Get(orig.String())
+			heartbeat.Send(n.Conn, via)
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
@@ -289,12 +316,8 @@ func (n *Node) Listen() {
 
 			// DataRequest
 			if msgData.Data != nil {
-				log.Println("[RECEIVE]\tDataRequest from " + orig.String())
-				go n.SendPiece(message, msgData.Website, msgData.Piece) //TODO: (gets data and sends it back)
-			} else {
-				//TODO ??? (I think it is not needed because you open temporary
-				//connections to download pices in RetrievePiece()
-
+				log.Println("[RECEIVE] DataRequest from " + orig.String())
+				go n.SendPiece(message, msgData.Website, msgData.Piece)
 			}
 		}
 	}
@@ -397,7 +420,8 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 
 		message := comm.NewDataRequest(tempPeer, &seeder, website.Name, piece)
 
-		message.Send(conn, &seeder)
+		via := n.RoutingTable.Get(seeder.String())
+		message.Send(conn, via)
 
 		// Maybe make a const for buffer size
 		buf := make([]byte, 65507)
@@ -430,9 +454,7 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
-	if err != nil {
-		log.Fatal(err)
-	}
+	utils.CheckError(err)
 
 	pieces := website.Pieces
 	numPieces := len(pieces) / 8
@@ -458,6 +480,8 @@ func (n *Node) AntiEntropy(timeout time.Duration) {
 	ticker := time.NewTicker(timeout)
 
 	for range ticker.C {
-		n.SendWebsiteMap()
+		if n.Peers.Count() > 0 {
+			n.SendWebsiteMap()
+		}
 	}
 }

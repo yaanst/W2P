@@ -200,9 +200,8 @@ func (n *Node) SendWebsiteMap() {
 // HeartBeat sends a hearbeat message to peer and waits for an answer or timeout
 func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	// Create a random local address for a new connection
-	conn, tempPeer := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
+	conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 	defer conn.Close()
-
 
 	message := comm.NewHeartbeat(n.Addr, peer)
 	buffer := make([]byte, utils.HeartBeatBufferSize)
@@ -241,9 +240,9 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 		n.WebsiteMap.RemovePeer(peer)
 	} else {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
-        if !n.Peers.Contains(peer) {
-		    n.Peers.Add(peer)
-        }
+		if !n.Peers.Contains(peer) {
+			n.Peers.Add(peer)
+		}
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
 }
@@ -275,15 +274,15 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
 		} else {
 			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
-            lWeb.Seeders = rWeb.Seeders
+			lWeb.Seeders = rWeb.Seeders
 
-            if rWeb.Version > lWeb.Version {
-                lWeb.Version = rWeb.Version
-                lWeb.SetKeywords(rWeb.GetKeywords())
-                lWeb.Pieces = rWeb.Pieces
+			if rWeb.Version > lWeb.Version {
+				lWeb.Version = rWeb.Version
+				lWeb.SetKeywords(rWeb.GetKeywords())
+				lWeb.Pieces = rWeb.Pieces
 
-                n.RetrieveWebsite(rWeb.Name)
-            }
+				n.RetrieveWebsite(rWeb.Name)
+			}
 		}
 	}
 }
@@ -303,9 +302,9 @@ func (n *Node) Listen() {
 		orig := message.Orig
 		dest := message.Dest
 
-        if !n.Peers.Contains(orig) {
-            n.Peers.Add(orig)
-        }
+		if !n.Peers.Contains(orig) {
+			n.Peers.Add(orig)
+		}
 
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
@@ -322,9 +321,9 @@ func (n *Node) Listen() {
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
-			log.Println("[RECEIVE]\tHeartbeat from " + orig.String()+ " (" + sender.String()+")")
+			log.Println("[RECEIVE]\tHeartbeat from " + orig.String() + " (" + sender.String() + ")")
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			log.Println("[REPLY]\tHeartbeat to " + orig.String() + " (" + sender.String()+")")
+			log.Println("[REPLY]\tHeartbeat to " + orig.String() + " (" + sender.String() + ")")
 			heartbeat.Send(n.Conn, sender)
 
 			// WebsiteMapUpdate
@@ -423,7 +422,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		log.Println("[PIECES]\tRetrieving piece '" + piece + "' for website '" +
 			website.Name + "' by " + seeder.String())
 
-		conn, tempPeer := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
+		conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 		defer conn.Close()
 
 		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))

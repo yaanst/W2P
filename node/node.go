@@ -229,6 +229,16 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 	}
 }
 
+
+// DiscoverPeers checks for any unknown peer in the WM in order to add them
+func (n *Node) DiscoverPeers(w *structs.Website) {
+    for _, s := range w.GetSeeders() {
+        if !n.Peers.Contains(&s) {
+            n.Peers.Add(&s)
+        }
+    }
+}
+
 // MergeWebsiteMap merges a WebsiteMap into the local one
 func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 	localWM := n.WebsiteMap
@@ -237,6 +247,7 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 	for _, rKey := range rIndices {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
+        go n.DiscoverPeers(rWeb)
 
 		if lWeb == nil {
 			log.Print("[WEBSITEMAP]\tAdding website '" + rWeb.Name + "'")

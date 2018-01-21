@@ -203,14 +203,14 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	conn, tempPeer := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 	defer conn.Close()
 
+
+	message := comm.NewHeartbeat(n.Addr, peer)
+	buffer := make([]byte, utils.HeartBeatBufferSize)
+
 	// Set Read timeout
 	conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
-	message := comm.NewHeartbeat(tempPeer, peer)
-	buffer := make([]byte, utils.HeartBeatBufferSize)
-
-	via := n.RoutingTable.Get(peer.String())
-	message.Send(conn, via)
+	message.Send(conn, peer)
 
 	log.Println("[SENT]\tHeartbeat to", peer.String())
 
@@ -226,7 +226,7 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 // CheckPeer checks if peer is up and removes it from every location if not
 func (n *Node) CheckPeer(peer *structs.Peer) {
 	for n.HBCounter.Read() >= utils.HeartBeatLimit {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	n.HBCounter.Inc()
 	defer n.HBCounter.Dec()
@@ -241,7 +241,9 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 		n.WebsiteMap.RemovePeer(peer)
 	} else {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
-		n.Peers.Add(peer)
+        if !n.Peers.Contains(peer) {
+		    n.Peers.Add(peer)
+        }
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
 }
@@ -271,25 +273,17 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 			n.RetrieveWebsite(rWeb.Name)
 		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
 			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
-		} else if rWeb.Version > lWeb.Version {
+		} else {
 			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
-			lWeb.Version = rWeb.Version
-			lWeb.SetKeywords(rWeb.GetKeywords())
-			lWeb.Pieces = rWeb.Pieces
+            lWeb.Seeders = rWeb.Seeders
 
-			// Add missing seeders for lWeb
-			for _, rPeer := range rWeb.GetSeeders() {
-				if !lWeb.Seeders.Contains(&rPeer) {
-					lWeb.Seeders.Add(&rPeer)
-				}
-			}
-			// Remove extra seeders for lWeb
-			for _, lPeer := range lWeb.GetSeeders() {
-				if !rWeb.Seeders.Contains(&lPeer) {
-					lWeb.Seeders.Remove(&lPeer)
-				}
-			}
-			n.RetrieveWebsite(rWeb.Name)
+            if rWeb.Version > lWeb.Version {
+                lWeb.Version = rWeb.Version
+                lWeb.SetKeywords(rWeb.GetKeywords())
+                lWeb.Pieces = rWeb.Pieces
+
+                n.RetrieveWebsite(rWeb.Name)
+            }
 		}
 	}
 }
@@ -309,6 +303,10 @@ func (n *Node) Listen() {
 		orig := message.Orig
 		dest := message.Dest
 
+        if !n.Peers.Contains(orig) {
+            n.Peers.Add(orig)
+        }
+
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
 			via := n.RoutingTable.Get(dest.String())
@@ -316,7 +314,7 @@ func (n *Node) Listen() {
 		}
 
 		// Update RoutingTable
-		if !structs.PeerEquals(orig, sender) {
+		if !structs.PeerEquals(orig, sender) && n.Peers.Contains(sender) {
 			n.RoutingTable.Set(orig.String(), sender)
 		} else {
 			n.RoutingTable.Set(orig.String(), orig)
@@ -324,10 +322,10 @@ func (n *Node) Listen() {
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
-			log.Println("[RECEIVE]\tHeartbeat from " + orig.String())
+			log.Println("[RECEIVE]\tHeartbeat from " + orig.String()+ " (" + sender.String()+")")
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			via := n.RoutingTable.Get(orig.String())
-			heartbeat.Send(n.Conn, via)
+			log.Println("[REPLY]\tHeartbeat to " + orig.String() + " (" + sender.String()+")")
+			heartbeat.Send(n.Conn, sender)
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
@@ -343,7 +341,7 @@ func (n *Node) Listen() {
 			if msgData.Data == nil {
 				log.Println("[RECEIVE]\tDataRequest: '" + msgData.Piece + "' for '" +
 					msgData.Website + "' from " + orig.String())
-				go n.SendPiece(message, msgData.Website, msgData.Piece)
+				go n.SendPiece(message, sender, msgData.Website, msgData.Piece)
 			}
 		}
 	}
@@ -430,7 +428,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 
 		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
 
-		message := comm.NewDataRequest(tempPeer, &seeder, website.Name, piece)
+		message := comm.NewDataRequest(n.Addr, &seeder, website.Name, piece)
 
 		via := n.RoutingTable.Get(seeder.String())
 		message.Send(conn, via)
@@ -465,7 +463,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 }
 
 // SendPiece sends a data reply with the data for the requested piece
-func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
+func (n *Node) SendPiece(request *comm.Message, sender *structs.Peer, name, pieceToSend string) {
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
@@ -488,7 +486,7 @@ func (n *Node) SendPiece(request *comm.Message, name, pieceToSend string) {
 			data = archiveData[offsetStart:offsetEnd]
 			// need to check for checksum here
 			reply := comm.NewDataReply(request, data)
-			reply.Send(n.Conn, reply.Dest)
+			reply.Send(n.Conn, sender)
 			log.Println("[SENT]\tPiece '" + piece + "' for website '" +
 				website.Name + "' to " + reply.Dest.String())
 			return

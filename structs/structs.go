@@ -180,11 +180,23 @@ func (peers *Peers) Contains(peer *Peer) bool {
 
 // Add adds a Peer to the Peers if not already present
 func (peers *Peers) Add(peer *Peer) {
-	if !peers.Contains(peer) {
-		peers.mux.Lock()
-		defer peers.mux.Unlock()
-		peers.P = append(peers.P, peer)
-	}
+    set := make(map[string]bool)
+    var newPeers []*Peer
+
+    peers.mux.Lock()
+	defer peers.mux.Unlock()
+
+    // remove duplicates
+    for _, p := range peers.P {
+        set[p.String()] = true
+    }
+    set[peer.String()] = true
+
+    // rebuild slice
+    for p, _ := range set {
+        newPeers = append(newPeers, ParsePeer(p))
+    }
+	peers.P = newPeers
 }
 
 // Remove removes a Peer from the Peers

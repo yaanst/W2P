@@ -32,6 +32,9 @@ const DefaultPieceLength int = 8192
 // messages
 const ListenBufferSize int = 65536
 
+// ConnBufferSize is the os buffer size to receive and send udp packets
+const ConnBufferSize int = 10485760 // 10MB
+
 // HeartBeatBufferSize is the default size for buffer waiting for a heartbeat
 const HeartBeatBufferSize int = 512
 
@@ -40,6 +43,9 @@ const HeartBeatLimit int = 50
 
 // HeartBeatTimeout is the default timeout for an answer from a peer
 const HeartBeatTimeout time.Duration = time.Duration(5000000000) // 5s
+
+// DataReqTimeout is the timeout before receiving data
+const DataReqTimeout time.Duration = time.Duration(10000000000) // 10s
 
 // HashSize is the number of hex character in a sha256 hash (for pieces)
 const HashSize int = 64

@@ -48,6 +48,9 @@ func NewNode(name, addrString, peersString string) *Node {
 	conn, err := net.ListenUDP("udp4", &connAddr)
 	utils.CheckError(err)
 
+	conn.SetReadBuffer(utils.ConnBufferSize)
+	conn.SetWriteBuffer(utils.ConnBufferSize)
+
 	return &Node{
 		Name:         name,
 		Addr:         addr,
@@ -373,11 +376,18 @@ func (n *Node) RetrieveWebsite(name string) {
 	numPieces := len(pieces) / utils.HashSize
 	chans := make([]chan []byte, numPieces)
 
-	for i := 0; i < numPieces; i++ {
-		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
-		chans[i] = make(chan []byte, 1)
-		go n.RetrievePiece(website, piece, chans[i])
-	}
+	go func() {
+		for i := 0; i < numPieces; i++ {
+			piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
+			chans[i] = make(chan []byte, 1)
+			go n.RetrievePiece(website, piece, chans[i])
+
+			// pause every 8 packets for 1/4 sec => ~250KB/sec
+			if (i+1)%8 == 0 {
+				//time.Sleep(250 * time.Millisecond)
+			}
+		}
+	}()
 
 	archive, err := os.Create(utils.SeedDir + website.Name)
 	defer archive.Close()
@@ -420,12 +430,18 @@ func (n *Node) RetrieveWebsite(name string) {
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	log.Println("[PIECES]\tRetrieving piece '" + piece + "'")
-	for _, seeder := range website.GetSeeders() {
+
+	// try twice for each seeders
+	seeders := website.GetSeeders()
+	seeders = append(seeders, seeders[:]...)
+	seeders = append(seeders, seeders[:]...)
+
+	for _, seeder := range seeders {
 
 		conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 		defer conn.Close()
 
-		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
+		conn.SetReadDeadline(time.Now().Add(utils.DataReqTimeout))
 
 		message := comm.NewDataRequest(n.Addr, &seeder, website.Name, piece)
 

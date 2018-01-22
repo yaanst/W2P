@@ -461,7 +461,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		if err != nil {
 			log.Println("[PIECES]\t\tNo response for piece '" + piece + "' for website '" +
 				website.Name + "' by " + seeder.String())
-			go n.CheckPeer(&seeder, nil)
+			go n.CheckPeer(&seeder, website)
 		} else {
 			reply := comm.DecodeMessage(buf)
 			// do some validity checks here
@@ -488,7 +488,9 @@ func (n *Node) SendPiece(request *comm.Message, sender *structs.Peer, name, piec
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
-	utils.CheckError(err)
+    if err != nil {
+        return
+    }
 
 	archiveSize := len(archiveData)
 	pieces := website.Pieces

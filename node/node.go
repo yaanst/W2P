@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"strings"
@@ -49,6 +48,9 @@ func NewNode(name, addrString, peersString string) *Node {
 	conn, err := net.ListenUDP("udp4", &connAddr)
 	utils.CheckError(err)
 
+	conn.SetReadBuffer(utils.ConnBufferSize)
+	conn.SetWriteBuffer(utils.ConnBufferSize)
+
 	return &Node{
 		Name:         name,
 		Addr:         addr,
@@ -58,6 +60,32 @@ func NewNode(name, addrString, peersString string) *Node {
 		RoutingTable: rt,
 		WebsiteMap:   wm,
 	}
+}
+
+// NewConnAndPeer creates a new connection on a free port in the range given
+// as well as the peer for this connection
+func NewConnAndPeer(ip net.IP, port, maxPort int) (*net.UDPConn, *structs.Peer) {
+	// to avoid conflict when creating a new node on same machine
+	minPort := port + 100
+
+	tempPeer := &structs.Peer{
+		IP:   ip,
+		Port: minPort,
+	}
+	lAddr := net.UDPAddr(*tempPeer)
+
+	conn, err := net.ListenUDP("udp4", &lAddr)
+
+	for err != nil {
+		tempPeer.Port++
+		if tempPeer.Port > maxPort {
+			tempPeer.Port = minPort
+		}
+		lAddr := net.UDPAddr(*tempPeer)
+		conn, err = net.ListenUDP("udp4", &lAddr)
+	}
+
+	return conn, tempPeer
 }
 
 // -----------
@@ -168,24 +196,15 @@ func (n *Node) SendWebsiteMap() {
 		via := n.RoutingTable.Get(p.String())
 		message.Send(n.Conn, via)
 		log.Println("[SENT]\tWebsiteMap to", p.String())
-		n.CheckPeer(&p)
+		n.CheckPeer(&p, nil)
 	}
 }
 
 // HeartBeat sends a hearbeat message to peer and waits for an answer or timeout
 func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 	// Create a random local address for a new connection
-	tempPeer := &structs.Peer{
-		IP:   n.Addr.IP,
-		Port: n.Addr.Port + 100 + rand.Intn(10000),
-		Zone: n.Addr.Zone,
-	}
-	lAddr := net.UDPAddr(*tempPeer)
-
-	conn, err := net.ListenUDP("udp4", &lAddr)
-	utils.CheckError(err)
+	conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 	defer conn.Close()
-
 
 	message := comm.NewHeartbeat(n.Addr, peer)
 	buffer := make([]byte, utils.HeartBeatBufferSize)
@@ -207,7 +226,7 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 }
 
 // CheckPeer checks if peer is up and removes it from every location if not
-func (n *Node) CheckPeer(peer *structs.Peer) {
+func (n *Node) CheckPeer(peer *structs.Peer, website *structs.Website) {
 	for n.HBCounter.Read() >= utils.HeartBeatLimit {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -224,21 +243,23 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 		n.WebsiteMap.RemovePeer(peer)
 	} else {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
-        if !n.Peers.Contains(peer) {
-		    n.Peers.Add(peer)
-        }
+		if !n.Peers.Contains(peer) {
+			n.Peers.Add(peer)
+            if website != nil {
+                website.AddSeeder(peer)
+            }
+		}
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
 }
 
-
 // DiscoverPeers checks for any unknown peer in the WM in order to add them
 func (n *Node) DiscoverPeers(w *structs.Website) {
-    for _, s := range w.GetSeeders() {
-        if !n.Peers.Contains(&s) {
-            n.Peers.Add(&s)
-        }
-    }
+	for _, s := range w.GetSeeders() {
+		if !n.Peers.Contains(&s) && !structs.PeerEquals(&s, n.Addr) {
+			n.Peers.Add(&s)
+		}
+	}
 }
 
 // MergeWebsiteMap merges a WebsiteMap into the local one
@@ -249,25 +270,30 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 	for _, rKey := range rIndices {
 		lWeb := localWM.Get(rKey)
 		rWeb := remoteWM.Get(rKey)
-        go n.DiscoverPeers(rWeb)
+		go n.DiscoverPeers(rWeb)
 
 		if lWeb == nil {
-			log.Print("[WEBSITEMAP]\tAdding website '" + rWeb.Name + "'")
+			log.Printf("[WEBSITEMAP]\tAdding website '%v'\n", rWeb.Name)
 			localWM.Set(rWeb)
 			n.RetrieveWebsite(rWeb.Name)
 		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
 			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
 		} else {
-			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
-            lWeb.Seeders = rWeb.Seeders
 
-            if rWeb.Version > lWeb.Version {
-                lWeb.Version = rWeb.Version
-                lWeb.SetKeywords(rWeb.GetKeywords())
-                lWeb.Pieces = rWeb.Pieces
-
-                n.RetrieveWebsite(rWeb.Name)
+			// make a diff function
+            diffSeeders := lWeb.DiffSeeders(rWeb)
+            for _, s := range diffSeeders {
+                go n.CheckPeer(s, lWeb)
             }
+
+			if rWeb.Version > lWeb.Version {
+				log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
+				lWeb.Version = rWeb.Version
+				lWeb.SetKeywords(rWeb.GetKeywords())
+				lWeb.Pieces = rWeb.Pieces
+
+				n.RetrieveWebsite(rWeb.Name)
+			}
 		}
 	}
 }
@@ -287,9 +313,9 @@ func (n *Node) Listen() {
 		orig := message.Orig
 		dest := message.Dest
 
-        if !n.Peers.Contains(orig) {
-            n.Peers.Add(orig)
-        }
+		if !n.Peers.Contains(orig) {
+			n.Peers.Add(orig)
+		}
 
 		// Forward message
 		if !structs.PeerEquals(dest, n.Addr) {
@@ -306,15 +332,14 @@ func (n *Node) Listen() {
 
 		// HeartBeat
 		if message.Meta == nil && message.Data == nil {
-			log.Println("[RECEIVE]\tHeartbeat from " + orig.String()+ " (" + sender.String()+")")
+			log.Println("[RECEIVE]\tHeartbeat from " + orig.String() + " (" + sender.String() + ")")
 			heartbeat := comm.NewHeartbeat(n.Addr, orig)
-			log.Println("[REPLY]\tHeartbeat to " + orig.String() + " (" + sender.String()+")")
+			log.Println("[REPLY]\tHeartbeat to " + orig.String() + " (" + sender.String() + ")")
 			heartbeat.Send(n.Conn, sender)
 
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
 			log.Println("[RECEIVE]\tWebsiteMap from " + orig.String())
-			go n.CheckPeer(orig)
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
 			// Data
@@ -357,11 +382,18 @@ func (n *Node) RetrieveWebsite(name string) {
 	numPieces := len(pieces) / utils.HashSize
 	chans := make([]chan []byte, numPieces)
 
-	for i := 0; i < numPieces; i++ {
-		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
-		chans[i] = make(chan []byte, 1)
-		go n.RetrievePiece(website, piece, chans[i])
-	}
+	go func() {
+		for i := 0; i < numPieces; i++ {
+			piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
+			chans[i] = make(chan []byte, 1)
+			go n.RetrievePiece(website, piece, chans[i])
+
+			// pause every 8 packets for 1/4 sec => ~250KB/sec
+			if (i+1)%8 == 0 {
+				//time.Sleep(250 * time.Millisecond)
+			}
+		}
+	}()
 
 	archive, err := os.Create(utils.SeedDir + website.Name)
 	defer archive.Close()
@@ -373,13 +405,13 @@ func (n *Node) RetrieveWebsite(name string) {
 	var mutex sync.Mutex
 	ok := make(chan int, numPieces)
 	for i, c := range chans {
-		go func() {
-			data := <-c
+		go func(i int, ch chan []byte) {
+			data := <-ch
 			mutex.Lock()
 			archive.WriteAt(data[:], int64(i*utils.DefaultPieceLength))
 			mutex.Unlock()
 			ok <- 1
-		}()
+		}(i, c)
 	}
 
 	// wait for all pieces to be written in archive
@@ -403,31 +435,19 @@ func (n *Node) RetrieveWebsite(name string) {
 
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
-	for _, seeder := range website.GetSeeders() {
-		log.Println("[PIECES]\tRetrieving piece '" + piece + "' for website '" +
-			website.Name + "' by " + seeder.String())
+	log.Println("[PIECES]\tRetrieving piece '" + piece + "'")
 
-		// Create a random local address for a new connection
-		tempPeer := &structs.Peer{
-			IP:   n.Addr.IP,
-			Port: n.Addr.Port + 10100 + rand.Intn(20000),
-			Zone: n.Addr.Zone,
-		}
-		lAddr := net.UDPAddr(*tempPeer)
+	// try 4 times for each seeders
+	seeders := website.GetSeeders()
+	seeders = append(seeders, seeders[:]...)
+	seeders = append(seeders, seeders[:]...)
 
-		// try 2 different ports
-		conn, err := net.ListenUDP("udp4", &lAddr)
-		if err != nil {
-			tempPeer.Port++
-			lAddr := net.UDPAddr(*tempPeer)
-			conn, err = net.ListenUDP("udp4", &lAddr)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
+	for _, seeder := range seeders {
+
+		conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 		defer conn.Close()
 
-		conn.SetReadDeadline(time.Now().Add(utils.HeartBeatTimeout))
+		conn.SetReadDeadline(time.Now().Add(utils.DataReqTimeout))
 
 		message := comm.NewDataRequest(n.Addr, &seeder, website.Name, piece)
 
@@ -439,9 +459,11 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 
 		// Maybe make a const for buffer size
 		buf := make([]byte, 65507)
-		_, err = conn.Read(buf)
+		_, err := conn.Read(buf)
 		if err != nil {
-			n.CheckPeer(&seeder)
+			log.Println("[PIECES]\t\tNo response for piece '" + piece + "' for website '" +
+				website.Name + "' by " + seeder.String())
+			go n.CheckPeer(&seeder, nil)
 		} else {
 			reply := comm.DecodeMessage(buf)
 			// do some validity checks here
@@ -451,10 +473,10 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 			hash := hex.EncodeToString(sum[:])
 
 			if hash != piece {
-				log.Println("[PIECES]\tBad piece '" + piece + "' for website '" +
+				log.Println("[PIECES]\t\tBad piece '" + piece + "' for website '" +
 					website.Name + "' by " + seeder.String())
 			} else {
-				log.Println("[PIECES]\tGood piece '" + piece + "' for website '" +
+				log.Println("[PIECES]\t\tGood piece '" + piece + "' for website '" +
 					website.Name + "' by " + seeder.String())
 				c <- data
 				return
@@ -501,7 +523,7 @@ func (n *Node) AntiEntropy(timeout time.Duration) {
 
 	for range ticker.C {
 		if n.Peers.Count() > 0 {
-			n.SendWebsiteMap()
+			go n.SendWebsiteMap()
 		}
 	}
 }

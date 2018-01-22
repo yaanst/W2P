@@ -15,7 +15,7 @@ go get github.com/yaanst/W2P
 
 W2P is run with the cli and you need to precise a few argument to the node
 ```bash
-W2P -name="NodeA" -addr=127.0.0.1:10000 -peers="127.0.0.1:10001" -uiPort=4000
+W2P -name="NodeA" -addr="127.0.0.1:10000" -peers="127.0.0.1:10001" -uiPort=4000
 ```
 
 - **name** is the name of the node your want to run
@@ -34,7 +34,7 @@ The idea for this project is to build a p2p network capable of serving distribut
  
 ## Status
 
-What is working:
+What works:
  - User interface
  - Integrity (signing, verifying, creating and storing keys)
  - Search
@@ -42,5 +42,5 @@ What is working:
  - Update
  - Web server
  
-What still needs working on:
+What still needs work:
  - Communication between peers

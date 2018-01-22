@@ -193,7 +193,7 @@ func (peers *Peers) Add(peer *Peer) {
     set[peer.String()] = true
 
     // rebuild slice
-    for p, _ := range set {
+    for p := range set {
         newPeers = append(newPeers, ParsePeer(p))
     }
 	peers.P = newPeers
@@ -315,15 +315,15 @@ func (w *Website) AddSeeder(peer *Peer) {
 }
 
 // DiffSeeders returns the seeders present in a website and not the other
-func (lWeb *Website) DiffSeeders(rWeb *Website) []*Peer {
+func (w *Website) DiffSeeders(rWeb *Website) []*Peer {
     var seeders []*Peer
 
     for _, s := range rWeb.Seeders.GetAll() {
-        if !lWeb.Seeders.Contains(&s) {
+        if !w.Seeders.Contains(&s) {
             seeders = append(seeders, &s)
         }
     }
-    for _, s := range lWeb.Seeders.GetAll() {
+    for _, s := range w.Seeders.GetAll() {
         if !rWeb.Seeders.Contains(&s) {
             seeders = append(seeders, &s)
         }
@@ -520,16 +520,13 @@ func (w *Website) Unbundle() {
 			}
 
 		case tar.TypeReg:
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.FileMode(header.Mode))
 			defer f.Close()
 			utils.CheckError(err)
 
 			_, err = io.Copy(f, tr)
 			utils.CheckError(err)
 		}
-	}
-	if !w.Verify() {
-		log.Fatalf("[UNBUNDLE] Signature for %v does not match\n", w.Name)
 	}
 }
 

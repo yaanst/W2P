@@ -431,6 +431,9 @@ func (n *Node) RetrieveWebsite(name string) {
 
 	log.Println("[WEBSITES]\tUnbundling website '" + name + "'")
 	website.Unbundle()
+    if !website.Verify() {
+		log.Fatalf("[UNBUNDLE] Verfication failed for website %v\n", website.Name)
+    }
 
 	log.Println("[WEBSITES]\tSaving metadata for '" + name + "'")
 	website.SaveMetadata()

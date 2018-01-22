@@ -314,6 +314,23 @@ func (w *Website) AddSeeder(peer *Peer) {
 	w.Seeders.Add(peer)
 }
 
+// DiffSeeders returns the seeders present in a website and not the other
+func (lWeb *Website) DiffSeeders(rWeb *Website) []*Peer {
+    var seeders []*Peer
+
+    for _, s := range rWeb.Seeders.GetAll() {
+        if !lWeb.Seeders.Contains(&s) {
+            seeders = append(seeders, &s)
+        }
+    }
+    for _, s := range lWeb.Seeders.GetAll() {
+        if !rWeb.Seeders.Contains(&s) {
+            seeders = append(seeders, &s)
+        }
+    }
+    return seeders
+}
+
 // GetSeeders gets all the seeders
 func (w *Website) GetSeeders() []Peer {
 	return w.Seeders.GetAll()

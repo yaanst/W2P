@@ -42,7 +42,7 @@ const HeartBeatBufferSize int = 512
 const HeartBeatLimit int = 50
 
 // HeartBeatTimeout is the default timeout for an answer from a peer
-const HeartBeatTimeout time.Duration = time.Duration(5000000000) // 5s
+const HeartBeatTimeout time.Duration = time.Duration(10000000000) // 10s
 
 // DataReqTimeout is the timeout before receiving data
 const DataReqTimeout time.Duration = time.Duration(10000000000) // 10s

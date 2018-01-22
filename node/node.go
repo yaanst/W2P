@@ -193,7 +193,7 @@ func (n *Node) SendWebsiteMap() {
 		via := n.RoutingTable.Get(p.String())
 		message.Send(n.Conn, via)
 		log.Println("[SENT]\tWebsiteMap to", p.String())
-		n.CheckPeer(&p)
+		n.CheckPeer(&p, nil)
 	}
 }
 
@@ -223,7 +223,7 @@ func (n *Node) HeartBeat(peer *structs.Peer, reachable chan bool) {
 }
 
 // CheckPeer checks if peer is up and removes it from every location if not
-func (n *Node) CheckPeer(peer *structs.Peer) {
+func (n *Node) CheckPeer(peer *structs.Peer, website *structs.Website) {
 	for n.HBCounter.Read() >= utils.HeartBeatLimit {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -242,6 +242,9 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
 		if !n.Peers.Contains(peer) {
 			n.Peers.Add(peer)
+            if website != nil {
+                website.AddSeeder(peer)
+            }
 		}
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
@@ -267,7 +270,7 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		go n.DiscoverPeers(rWeb)
 
 		if lWeb == nil {
-			log.Print("[WEBSITEMAP]\tAdding website '" + rWeb.Name + "'")
+			log.Printf("[WEBSITEMAP]\tAdding website '%v'\n", rWeb.Name)
 			localWM.Set(rWeb)
 			n.RetrieveWebsite(rWeb.Name)
 		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
@@ -275,7 +278,10 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		} else {
 
 			// make a diff function
-			lWeb.Seeders = rWeb.Seeders
+            diffSeeders := lWeb.DiffSeeders(rWeb)
+            for _, s := range diffSeeders {
+                go n.CheckPeer(s, lWeb)
+            }
 
 			if rWeb.Version > lWeb.Version {
 				log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
@@ -441,7 +447,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		if err != nil {
 			log.Println("[PIECES]\t\tNo response for piece '" + piece + "' for website '" +
 				website.Name + "' by " + seeder.String())
-			go n.CheckPeer(&seeder)
+			go n.CheckPeer(&seeder, nil)
 		} else {
 			reply := comm.DecodeMessage(buf)
 			// do some validity checks here

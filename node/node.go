@@ -250,7 +250,7 @@ func (n *Node) CheckPeer(peer *structs.Peer) {
 // DiscoverPeers checks for any unknown peer in the WM in order to add them
 func (n *Node) DiscoverPeers(w *structs.Website) {
 	for _, s := range w.GetSeeders() {
-		if !n.Peers.Contains(&s) {
+		if !n.Peers.Contains(&s) && !structs.PeerEquals(&s, n.Addr) {
 			n.Peers.Add(&s)
 		}
 	}
@@ -273,10 +273,12 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		} else if lWeb.PubKey.String() != rWeb.PubKey.String() {
 			log.Fatalf("[WEBSITEMAP]\tPublic keys not matching for local/remote website %v\n", lWeb.Name)
 		} else {
-			log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
+
+			// make a diff function
 			lWeb.Seeders = rWeb.Seeders
 
 			if rWeb.Version > lWeb.Version {
+				log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
 				lWeb.Version = rWeb.Version
 				lWeb.SetKeywords(rWeb.GetKeywords())
 				lWeb.Pieces = rWeb.Pieces
@@ -329,7 +331,6 @@ func (n *Node) Listen() {
 			// WebsiteMapUpdate
 		} else if message.Meta != nil {
 			log.Println("[RECEIVE]\tWebsiteMap from " + orig.String())
-			go n.CheckPeer(orig)
 			go n.MergeWebsiteMap(message.Meta.WebsiteMap)
 
 			// Data
@@ -388,13 +389,13 @@ func (n *Node) RetrieveWebsite(name string) {
 	var mutex sync.Mutex
 	ok := make(chan int, numPieces)
 	for i, c := range chans {
-		go func() {
-			data := <-c
+		go func(i int, ch chan []byte) {
+			data := <-ch
 			mutex.Lock()
 			archive.WriteAt(data[:], int64(i*utils.DefaultPieceLength))
 			mutex.Unlock()
 			ok <- 1
-		}()
+		}(i, c)
 	}
 
 	// wait for all pieces to be written in archive
@@ -418,9 +419,8 @@ func (n *Node) RetrieveWebsite(name string) {
 
 // RetrievePiece retrieves a piece from a website archive and input it in a channel
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
+	log.Println("[PIECES]\tRetrieving piece '" + piece + "'")
 	for _, seeder := range website.GetSeeders() {
-		log.Println("[PIECES]\tRetrieving piece '" + piece + "' for website '" +
-			website.Name + "' by " + seeder.String())
 
 		conn, _ := NewConnAndPeer(n.Addr.IP, n.Addr.Port, n.Addr.Port+10000)
 		defer conn.Close()
@@ -439,7 +439,9 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		buf := make([]byte, 65507)
 		_, err := conn.Read(buf)
 		if err != nil {
-			n.CheckPeer(&seeder)
+			log.Println("[PIECES]\t\tNo response for piece '" + piece + "' for website '" +
+				website.Name + "' by " + seeder.String())
+			go n.CheckPeer(&seeder)
 		} else {
 			reply := comm.DecodeMessage(buf)
 			// do some validity checks here
@@ -449,10 +451,10 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 			hash := hex.EncodeToString(sum[:])
 
 			if hash != piece {
-				log.Println("[PIECES]\tBad piece '" + piece + "' for website '" +
+				log.Println("[PIECES]\t\tBad piece '" + piece + "' for website '" +
 					website.Name + "' by " + seeder.String())
 			} else {
-				log.Println("[PIECES]\tGood piece '" + piece + "' for website '" +
+				log.Println("[PIECES]\t\tGood piece '" + piece + "' for website '" +
 					website.Name + "' by " + seeder.String())
 				c <- data
 				return
@@ -499,7 +501,7 @@ func (n *Node) AntiEntropy(timeout time.Duration) {
 
 	for range ticker.C {
 		if n.Peers.Count() > 0 {
-			n.SendWebsiteMap()
+			go n.SendWebsiteMap()
 		}
 	}
 }

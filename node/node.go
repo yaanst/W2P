@@ -431,7 +431,7 @@ func (n *Node) RetrieveWebsite(name string) {
 func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []byte) {
 	log.Println("[PIECES]\tRetrieving piece '" + piece + "'")
 
-	// try twice for each seeders
+	// try 4 times for each seeders
 	seeders := website.GetSeeders()
 	seeders = append(seeders, seeders[:]...)
 	seeders = append(seeders, seeders[:]...)

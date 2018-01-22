@@ -245,9 +245,9 @@ func (n *Node) CheckPeer(peer *structs.Peer, website *structs.Website) {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
 		if !n.Peers.Contains(peer) {
 			n.Peers.Add(peer)
-            if website != nil {
-                website.AddSeeder(peer)
-            }
+			if website != nil {
+				website.AddSeeder(peer)
+			}
 		}
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
@@ -281,10 +281,10 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		} else {
 
 			// make a diff function
-            diffSeeders := lWeb.DiffSeeders(rWeb)
-            for _, s := range diffSeeders {
-                go n.CheckPeer(s, lWeb)
-            }
+			diffSeeders := lWeb.DiffSeeders(rWeb)
+			for _, s := range diffSeeders {
+				go n.CheckPeer(s, lWeb)
+			}
 
 			if rWeb.Version > lWeb.Version {
 				log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
@@ -382,36 +382,34 @@ func (n *Node) RetrieveWebsite(name string) {
 	numPieces := len(pieces) / utils.HashSize
 	chans := make([]chan []byte, numPieces)
 
-	go func() {
-		for i := 0; i < numPieces; i++ {
-			piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
-			chans[i] = make(chan []byte, 1)
-			go n.RetrievePiece(website, piece, chans[i])
-
-			// pause every 8 packets for 1/4 sec => ~250KB/sec
-			if (i+1)%8 == 0 {
-				//time.Sleep(250 * time.Millisecond)
-			}
-		}
-	}()
-
 	archive, err := os.Create(utils.SeedDir + website.Name)
 	defer archive.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	for i := 0; i < numPieces; i++ {
+		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
+		chans[i] = make(chan []byte)
+		go n.RetrievePiece(website, piece, chans[i])
+
+		// pause every 8 packets for 1/4 sec => ~250KB/sec
+		if (i+1)%15 == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
 	// write all pieces in archive at correct pos once retrieven
 	var mutex sync.Mutex
 	ok := make(chan int, numPieces)
-	for i, c := range chans {
+	for idx, c := range chans {
 		go func(i int, ch chan []byte) {
 			data := <-ch
 			mutex.Lock()
 			archive.WriteAt(data[:], int64(i*utils.DefaultPieceLength))
 			mutex.Unlock()
 			ok <- 1
-		}(i, c)
+		}(idx, c)
 	}
 
 	// wait for all pieces to be written in archive

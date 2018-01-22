@@ -561,6 +561,14 @@ func (w *Website) GenPieces(pieceLength int) {
 	w.Pieces = pieces
 }
 
+// ClearSeeders removes all seeders for a website
+func (w *Website) ClearSeeders() {
+    w.Seeders.mux.Lock()
+    defer w.Seeders.mux.Unlock()
+    w.Seeders.P = make([]*Peer, 0, 5)
+}
+
+
 // Counter
 
 // Read returns the current value

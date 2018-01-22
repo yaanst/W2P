@@ -167,6 +167,10 @@ func (n *Node) UpdateWebsite(name string, keywords []string) bool {
 	website := n.WebsiteMap.Get(name)
 
 	if website != nil && website.Owned() {
+		log.Println("[WEBSITES]\t\tClearing seeders and adding self for website '" + name + "'")
+        website.ClearSeeders()
+        website.AddSeeder(n.Addr)
+
 		log.Println("[WEBSITES]\t\tRe-signing website '" + name + "'")
 		website.Sign()
 
@@ -291,6 +295,7 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 				lWeb.Version = rWeb.Version
 				lWeb.SetKeywords(rWeb.GetKeywords())
 				lWeb.Pieces = rWeb.Pieces
+                lWeb.Seeders = rWeb.Seeders
 
 				n.RetrieveWebsite(rWeb.Name)
 			}

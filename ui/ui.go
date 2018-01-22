@@ -84,6 +84,25 @@ func UpdateWebsite(node *node.Node) http.HandlerFunc {
 	}
 }
 
+// ShowStatus collects some information about the current node
+func ShowStatus(node *node.Node) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+        if request.Method == "GET" {
+            info := make(map[string]interface{})
+            info["name"] = node.Name
+            info["addr"] = node.Addr.String()
+            info["peers"] = node.Peers.Count()
+            info["websites"] = node.WebsiteMap.Count()
+
+            jsonData, err := json.Marshal(info)
+            utils.CheckError(err)
+
+            fmt.Fprint(writer, string(jsonData))
+        }
+    }
+}
+
+
 // ServeUI serves the UI page
 func ServeUI() http.Handler {
 	return http.FileServer(http.Dir(utils.UIDir))
@@ -117,6 +136,7 @@ func StartServer(uiPort string, node *node.Node) {
 	http.Handle("/w/", ServeWebsites())
 	http.Handle("/list", ListWebsites(node))
 	http.HandleFunc("/scan", ScanWebsiteFolder)
+	http.HandleFunc("/status", ShowStatus(node))
 	http.Handle("/filter", FilterWebsites(node))
 	http.HandleFunc("/share", ImportWebsite(node))
 	http.HandleFunc("/update", UpdateWebsite(node))

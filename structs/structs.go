@@ -290,6 +290,13 @@ func (wm *WebsiteMap) RemovePeer(peer *Peer) {
 	}
 }
 
+// Count returns the number of websites stored in the WebsiteMap
+func (wm *WebsiteMap) Count() int {
+    wm.mux.RLock()
+    defer wm.mux.RUnlock()
+    return len(wm.W)
+}
+
 // Website
 
 // GetKeywords return the list of keywords of a website

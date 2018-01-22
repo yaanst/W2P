@@ -9,6 +9,14 @@
     });
 })();
 
+// Get status info
+(function fetch_status_info() {
+    $.get("/status", function(data) {
+        print_status_info(data);
+        setTimeout(fetch_status_info, 1000);
+    });
+})();
+
 /********************
         Buttons
 *********************/
@@ -122,6 +130,7 @@ function print_websites_list(data) {
     delete websites;
 }
 
+// Format and print the filtered list of websites
 function print_websites_filtered(data) {
     websites = JSON.parse(data);
     list = ""
@@ -138,7 +147,7 @@ function print_websites_filtered(data) {
     delete websites;
 }
 
-// Format and print 
+// Format and print the contents of the website folder
 function print_website_folder(data) {
     websites = JSON.parse(data);
     websites = websites.sort();
@@ -152,4 +161,22 @@ function print_website_folder(data) {
     $("#extra_folders_select").html(options);
     delete websites;
     delete options;
+}
+
+// Format and print the stauts information
+function print_status_info(data) {
+    info = JSON.parse(data);
+    name = "<b>Name:</b> " + info["name"];
+    addr = "<b>Address:</b> " + info["addr"];
+    peers = "<b>#Peers:</b> " + info["peers"];
+    websites = "<b>#Websites:</b> " + info["websites"];
+    $("#status_bar_name").html(name);
+    $("#status_bar_addr").html(addr);
+    $("#status_bar_peers").html(peers);
+    $("#status_bar_websites").html(websites);
+    delete info;
+    delete name;
+    delete addr;
+    delete peers;
+    delete websites;
 }

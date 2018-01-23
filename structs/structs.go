@@ -180,29 +180,29 @@ func (peers *Peers) Contains(peer *Peer) bool {
 
 // Add adds a Peer to the Peers if not already present
 func (peers *Peers) Add(peer *Peer) {
-    set := make(map[string]bool)
-    var newPeers []*Peer
+	set := make(map[string]bool)
+	var newPeers []*Peer
 
-    peers.mux.Lock()
+	peers.mux.Lock()
 	defer peers.mux.Unlock()
 
-    // remove duplicates
-    for _, p := range peers.P {
-        set[p.String()] = true
-    }
-    set[peer.String()] = true
+	// remove duplicates
+	for _, p := range peers.P {
+		set[p.String()] = true
+	}
+	set[peer.String()] = true
 
-    // rebuild slice
-    for p := range set {
-        newPeers = append(newPeers, ParsePeer(p))
-    }
+	// rebuild slice
+	for p := range set {
+		newPeers = append(newPeers, ParsePeer(p))
+	}
 	peers.P = newPeers
 }
 
 // Remove removes a Peer from the Peers
 func (peers *Peers) Remove(peer *Peer) {
 	peers.mux.Lock()
-    defer peers.mux.Unlock()
+	defer peers.mux.Unlock()
 	for i, p := range peers.P {
 		if PeerEquals(p, peer) {
 			// cut slice in 2 part and append without i-th element inbetween
@@ -236,7 +236,7 @@ func (peers *Peers) Count() int {
 // Set adds/updates a website to the website map
 func (wm *WebsiteMap) Set(website *Website) {
 	wm.mux.Lock()
-    defer wm.mux.Unlock()
+	defer wm.mux.Unlock()
 	wm.W[website.Name] = website
 }
 
@@ -292,9 +292,9 @@ func (wm *WebsiteMap) RemovePeer(peer *Peer) {
 
 // Count returns the number of websites stored in the WebsiteMap
 func (wm *WebsiteMap) Count() int {
-    wm.mux.RLock()
-    defer wm.mux.RUnlock()
-    return len(wm.W)
+	wm.mux.RLock()
+	defer wm.mux.RUnlock()
+	return len(wm.W)
 }
 
 // Website
@@ -316,19 +316,19 @@ func (w *Website) AddSeeder(peer *Peer) {
 
 // DiffSeeders returns the seeders present in a website and not the other
 func (w *Website) DiffSeeders(rWeb *Website) []*Peer {
-    var seeders []*Peer
+	var seeders []*Peer
 
-    for _, s := range rWeb.Seeders.GetAll() {
-        if !w.Seeders.Contains(&s) {
-            seeders = append(seeders, &s)
-        }
-    }
-    for _, s := range w.Seeders.GetAll() {
-        if !rWeb.Seeders.Contains(&s) {
-            seeders = append(seeders, &s)
-        }
-    }
-    return seeders
+	for _, s := range rWeb.Seeders.GetAll() {
+		if !w.Seeders.Contains(&s) {
+			seeders = append(seeders, &s)
+		}
+	}
+	for _, s := range w.Seeders.GetAll() {
+		if !rWeb.Seeders.Contains(&s) {
+			seeders = append(seeders, &s)
+		}
+	}
+	return seeders
 }
 
 // GetSeeders gets all the seeders
@@ -491,6 +491,9 @@ func (w *Website) Bundle() {
 
 // Unbundle uncompress and unarchive a website to display it
 func (w *Website) Unbundle() {
+	// remove everything before undbundling
+	os.RemoveAll(utils.WebsiteDir + w.Name)
+
 	archive, err := os.Open(utils.SeedDir + w.Name)
 	defer archive.Close()
 	utils.CheckError(err)
@@ -560,11 +563,10 @@ func (w *Website) GenPieces(pieceLength int) {
 
 // ClearSeeders removes all seeders for a website
 func (w *Website) ClearSeeders() {
-    w.Seeders.mux.Lock()
-    defer w.Seeders.mux.Unlock()
-    w.Seeders.P = make([]*Peer, 0, 5)
+	w.Seeders.mux.Lock()
+	defer w.Seeders.mux.Unlock()
+	w.Seeders.P = make([]*Peer, 0, 5)
 }
-
 
 // Counter
 

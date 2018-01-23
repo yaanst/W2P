@@ -167,6 +167,10 @@ func (n *Node) UpdateWebsite(name string, keywords []string) bool {
 	website := n.WebsiteMap.Get(name)
 
 	if website != nil && website.Owned() {
+		log.Println("[WEBSITES]\t\tClearing seeders and adding self for website '" + name + "'")
+        website.ClearSeeders()
+        website.AddSeeder(n.Addr)
+
 		log.Println("[WEBSITES]\t\tRe-signing website '" + name + "'")
 		website.Sign()
 
@@ -245,9 +249,9 @@ func (n *Node) CheckPeer(peer *structs.Peer, website *structs.Website) {
 		log.Println("[HEARTBEAT]\tPeer", peer, "is up")
 		if !n.Peers.Contains(peer) {
 			n.Peers.Add(peer)
-            if website != nil {
-                website.AddSeeder(peer)
-            }
+			if website != nil {
+				website.AddSeeder(peer)
+			}
 		}
 		n.RoutingTable.Set(peer.String(), peer) // Reset RoutingTable entry
 	}
@@ -281,16 +285,17 @@ func (n *Node) MergeWebsiteMap(remoteWM *structs.WebsiteMap) {
 		} else {
 
 			// make a diff function
-            diffSeeders := lWeb.DiffSeeders(rWeb)
-            for _, s := range diffSeeders {
-                go n.CheckPeer(s, lWeb)
-            }
+			diffSeeders := lWeb.DiffSeeders(rWeb)
+			for _, s := range diffSeeders {
+				go n.CheckPeer(s, lWeb)
+			}
 
 			if rWeb.Version > lWeb.Version {
 				log.Print("[WEBSITEMAP]\tUpdating website '" + lWeb.Name + "'")
 				lWeb.Version = rWeb.Version
 				lWeb.SetKeywords(rWeb.GetKeywords())
 				lWeb.Pieces = rWeb.Pieces
+                lWeb.Seeders = rWeb.Seeders
 
 				n.RetrieveWebsite(rWeb.Name)
 			}
@@ -382,36 +387,34 @@ func (n *Node) RetrieveWebsite(name string) {
 	numPieces := len(pieces) / utils.HashSize
 	chans := make([]chan []byte, numPieces)
 
-	go func() {
-		for i := 0; i < numPieces; i++ {
-			piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
-			chans[i] = make(chan []byte, 1)
-			go n.RetrievePiece(website, piece, chans[i])
-
-			// pause every 8 packets for 1/4 sec => ~250KB/sec
-			if (i+1)%8 == 0 {
-				//time.Sleep(250 * time.Millisecond)
-			}
-		}
-	}()
-
 	archive, err := os.Create(utils.SeedDir + website.Name)
 	defer archive.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	for i := 0; i < numPieces; i++ {
+		piece := pieces[i*utils.HashSize : (i+1)*utils.HashSize]
+		chans[i] = make(chan []byte)
+		go n.RetrievePiece(website, piece, chans[i])
+
+		// pause every 8 packets for 1/4 sec => ~250KB/sec
+		if (i+1)%15 == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
 	// write all pieces in archive at correct pos once retrieven
 	var mutex sync.Mutex
 	ok := make(chan int, numPieces)
-	for i, c := range chans {
+	for idx, c := range chans {
 		go func(i int, ch chan []byte) {
 			data := <-ch
 			mutex.Lock()
 			archive.WriteAt(data[:], int64(i*utils.DefaultPieceLength))
 			mutex.Unlock()
 			ok <- 1
-		}(i, c)
+		}(idx, c)
 	}
 
 	// wait for all pieces to be written in archive
@@ -428,6 +431,9 @@ func (n *Node) RetrieveWebsite(name string) {
 
 	log.Println("[WEBSITES]\tUnbundling website '" + name + "'")
 	website.Unbundle()
+    if !website.Verify() {
+		log.Fatalf("[UNBUNDLE] Verfication failed for website %v\n", website.Name)
+    }
 
 	log.Println("[WEBSITES]\tSaving metadata for '" + name + "'")
 	website.SaveMetadata()
@@ -463,7 +469,7 @@ func (n *Node) RetrievePiece(website *structs.Website, piece string, c chan []by
 		if err != nil {
 			log.Println("[PIECES]\t\tNo response for piece '" + piece + "' for website '" +
 				website.Name + "' by " + seeder.String())
-			go n.CheckPeer(&seeder, nil)
+			go n.CheckPeer(&seeder, website)
 		} else {
 			reply := comm.DecodeMessage(buf)
 			// do some validity checks here
@@ -490,7 +496,9 @@ func (n *Node) SendPiece(request *comm.Message, sender *structs.Peer, name, piec
 	website := n.WebsiteMap.Get(name)
 
 	archiveData, err := ioutil.ReadFile(utils.SeedDir + website.Name)
-	utils.CheckError(err)
+    if err != nil {
+        return
+    }
 
 	archiveSize := len(archiveData)
 	pieces := website.Pieces

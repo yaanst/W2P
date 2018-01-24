@@ -13,7 +13,7 @@ go get github.com/yaanst/W2P
 
 ### Usage
 
-W2P is run with the cli and you need to precise a few argument to the node
+W2P is run with the cli and you need to precise a few argument to the node, e.g:
 ```bash
 W2P -name="NodeA" -addr="127.0.0.1:10000" -peers="127.0.0.1:10001" -uiPort=4000
 ```
@@ -22,6 +22,10 @@ W2P -name="NodeA" -addr="127.0.0.1:10000" -peers="127.0.0.1:10001" -uiPort=4000
 - **addr** is the IPv4 address on which your node will listen for other nodes
 - **peers** is a list of already runing nodes which will help to enter the network
 - **uiPort** is the port on which you can point your browser to access the UI
+  (default is 8000)
+
+If you wish to run several nodes locally, make sure to run them with different
+ports in separate folders and have a copy of the _ui/webpage_ subfolder in each of these folders.
 
 ## Features
 
@@ -31,16 +35,3 @@ The idea for this project is to build a p2p network capable of serving distribut
  - Searching by keywrds
  - Integrity checks 
  - Browser based user interface
- 
-## Status
-
-What works:
- - User interface
- - Integrity (signing, verifying, creating and storing keys)
- - Search
- - Download
- - Update
- - Web server
- 
-What still needs work:
- - Communication between peers
